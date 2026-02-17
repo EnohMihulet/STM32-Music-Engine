@@ -1,0 +1,21 @@
+Debug/
+Release/
+build/
+# Object and binary files
+*.o
+*.d
+*.su
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+
+.metadata/
+.settings/
+*.launch
+
+.DS_Store
+Thumbs.db
+*.swp
+
