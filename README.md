@@ -1,5 +1,4 @@
-STM32 Music Engine Project
-
+Music Engine Project
 
 STM32 Project using STM32CubeIDE
 
