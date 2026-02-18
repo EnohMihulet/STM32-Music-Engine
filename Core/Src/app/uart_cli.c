@@ -13,15 +13,11 @@ void UartBufferController_Init(UartRxBufferController* urbc) {
 	urbc->currPos = 0;
 	urbc->pending = false;
 	urbc->commandIndex = 0;
-	urbc->number = -1;
-	urbc->playbackControl = CommandPlaybackControlNone;
-	urbc->playRequest = CommandPlayRequestNone;
-	urbc->commandSettings = CommandSettingsNone;
 	memset(urbc->command, 0, sizeof(urbc->command));
 	__set_PRIMASK(primask);
 }
 
-void Uart_Update(UartRxBufferController* urbc) {
+void Uart_Update(UartRxBufferController* urbc, MusicEngineController* mec) {
 	if (!urbc->pending) return;
 	
 	UartRxBufferController* bc = urbc;
@@ -113,7 +109,7 @@ void Uart_Update(UartRxBufferController* urbc) {
 	}
 	bc->command[bc->commandIndex] = '\0';
 
-	Handle_Command(bc, bc->command);
+	Update_MusicEngine_Command(bc, mec, bc->command);
 
 	HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, 100);
 
@@ -122,47 +118,23 @@ void Uart_Update(UartRxBufferController* urbc) {
 	bc->commandIndex = 0;
 }
 
-void Handle_Command(UartRxBufferController* urbc, char* command) {
-	HAL_UART_Transmit(&huart2, urbc->command, strlen(urbc->command), 100);
-	HAL_UART_Transmit(&huart2, "\r\n", 2, 100);
-	UartRxBufferController* bc = urbc;
+void Update_MusicEngine_Command(UartRxBufferController* urbc, MusicEngineController* mec, char* command) {
+	HAL_UART_Transmit(&huart2, (uint8_t*)urbc->command, strlen(urbc->command), 100);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, 100);
+	if (mec == NULL) return;
 
 	char* endptr;
 	int64_t num = strtol(command, &endptr, 10);
 	if (*endptr == '\0') {
-		urbc->number = (int16_t)num;
+		mec->number = (int16_t)num;
 		return;
 	}
 
-	urbc->number = -1;
-	if (strcmp(command, "PAUSE") == 0) {
-		urbc->playbackControl = CommandPlaybackControlPause;
-	}
-	else if (strcmp(command, "RESUME") == 0) {
-		urbc->playbackControl = CommandPlaybackControlResume;
-	}
-	else if (strcmp(command, "STOP") == 0) {
-		urbc->playbackControl = CommandPlaybackControlStop;
-	}
-	else if (strcmp(command, "SKIP") == 0) {
-		urbc->playbackControl = CommandPlaybackControlSkip;
-	}
-	else if (strcmp(command, "CLEAR") == 0) {
-		urbc->playbackControl = CommandPlaybackControlClear;
-	}
-	else if (strcmp(command, "PLAY") == 0) {
-		urbc->playRequest = CommandPlayRequestPlay;
-	}
-	else if (strcmp(command, "QUEUE") == 0) {
-		urbc->playRequest = CommandPlayRequestQueue;
-	}
-	else if (strcmp(command, "TEMPO") == 0) {
-		urbc->commandSettings = CommandSettingsTempo;
-	}
-	else if (strcmp(command, "VOLUME") == 0) {
-		urbc->commandSettings = CommandSettingsVol;
-	}
-	else if (strcmp(command, "STATUS") == 0) {
-		urbc->commandSettings = CommandSettingsStatus;
+	mec->number = -1;
+	for (uint16_t i = 0; i < COMMAND_COUNT; i++) {
+		if (strcmp(command, COMMAND_STRINGS[i]) == 0) {
+			mec->command = i;
+		}
+
 	}
 }

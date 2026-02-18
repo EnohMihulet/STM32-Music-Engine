@@ -126,7 +126,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		Uart_Update(&gUartBufferController);
+		Uart_Update(&gUartBufferController, &gMusicEngineController);
 		Button_Update(&gButton);
 		MusicEngine_Update(&gMusicEngineController);
 

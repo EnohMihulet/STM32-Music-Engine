@@ -18,17 +18,12 @@ typedef struct UartRxBufferController {
 
 	char command[32];
 	uint16_t commandIndex;
-
-	int16_t number;
-	CommandPlaybackControl playbackControl;
-	CommandPlayRequest playRequest;
-	CommandSettings commandSettings;
 } UartRxBufferController;
 
 void UartBufferController_Init(UartRxBufferController* urbc);
 
-void Uart_Update(UartRxBufferController* urbc);
+void Uart_Update(UartRxBufferController* urbc, MusicEngineController* mec);
 
-void Handle_Command(UartRxBufferController* urbc, char* command);
+void Update_MusicEngine_Command(UartRxBufferController* urbc, MusicEngineController* mec, char* command);
 
 #endif /* APP_UART_CLI_H */

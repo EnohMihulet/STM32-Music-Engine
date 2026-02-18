@@ -51,9 +51,7 @@ void SongQueue_Clear(SongQueue* q) {
 }
 
 void MusicEngineController_Init(MusicEngineController* mec) {
-	mec->playbackControl = CommandPlaybackControlNone;
-	mec->playRequest = CommandPlayRequestNone;
-	mec->commandSettings = CommandSettingsNone;
+	mec->command = Command_None;
 
 	mec->isPlaying = false;;
 	mec->isPaused = false;
@@ -71,11 +69,9 @@ void MusicEngineController_Init(MusicEngineController* mec) {
 }
 
 void MusicEngine_Update(MusicEngineController* mec) {
-	if (mec->playbackControl == CommandPlaybackControlNone && mec->playRequest == CommandPlayRequestNone && mec->commandSettings == CommandSettingsNone) return;
+	if (mec->command = Command_None) return;
 
-	Handle_PlayCommand(mec, mec->playRequest);
-	Handle_PlaybackCommand(mec, mec->playbackControl);
-	Handle_SettingsCommand(mec, mec->commandSettings);
+	Handle_Command(mec);
 	
 	if (!mec->isPlaying || mec->isPaused) return;
 	if (!mec->buzzer.isPlaying) {
@@ -93,99 +89,82 @@ void MusicEngine_Update(MusicEngineController* mec) {
 	}
 }
 
-void Handle_PlayCommand(MusicEngineController* mec, CommandPlayRequest pr) {
-	switch (mec->playRequest) {
-		case CommandPlayRequestNone: break;
-		case CommandPlayRequestPlay:
-			if (mec->number == -1) {
-				Display_Songs(mec);
-				mec->number = 0;
-				return;
-			}
-			else if (mec->number == 0) {
-				return;
-			}
-			else if (1 <= mec->number && mec->number <= 3) {
-				Play_Song(mec, mec->number - 1);
-			}
-			break;
-		case CommandPlayRequestQueue:
-			if (mec->number == -1) {
-				Display_Songs(mec);
-				mec->number = 0;
-				return;
-			}
-			else if (mec->number == 0) {
-				return;
-			}
-			else if (1 <= mec->number && mec->number <= 3) {
-				Queue_Song(mec, mec->number - 1);
-			}
-			break;
-		case CommandPlayRequestPlaySeq:
+void Handle_Command(MusicEngineController* mec) {
+	switch (mec->command) {
+		case Command_None: break;
+		case Command_Pause: Handle_Command_Pause(mec); break;
+		case Command_Resume: Handle_Command_Resume(mec); break;
+		case Command_Stop: Handle_Command_Stop(mec); break;
+		case Command_Skip: Handle_Command_Skip(mec); break;
+		case Command_Clear: Handle_Command_Clear(mec); break;
+		case Command_Play: Handle_Command_Play(mec); break;
+		case Command_Queue: Handle_Command_Queue(mec); break;
+		case Command_Tempo: Handle_Command_Tempo(mec); break;
+		case Command_Volume: Handle_Command_Volume(mec); break;
+		case Command_Status: Handle_Command_Status(mec); break;
 		default: break;
 	}
-	mec->playRequest = CommandPlayRequestNone;
+	mec->command = Command_None;
 }
 
-void Handle_PlaybackCommand(MusicEngineController* mec, CommandPlaybackControl pbc) {
-	switch (mec->playbackControl) {
-		case CommandPlaybackControlNone: break;
-		case CommandPlaybackControlPause:
-			Pause_Song(mec);
-			break;
-		case CommandPlaybackControlResume:
-			Resume_Song(mec);
-			break;
-		case CommandPlaybackControlStop:
-			Stop_Song(mec);
-			break;
-		case CommandPlaybackControlSkip:
-			Skip_Song(mec);
-			break;
-		case CommandPlaybackControlClear:
-			SongQueue_Clear(&(mec->queue));
-			break;
-		default: break;
-	}
-	mec->playbackControl = CommandPlaybackControlNone;
+void Handle_Command_Pause(MusicEngineController* mec) {
+	Pause_Song(mec);
 }
 
-void Handle_SettingsCommand(MusicEngineController* mec, CommandSettings s) {
-	switch (mec->commandSettings) {
-		case CommandSettingsNone: break;
-		case CommandSettingsStatus:
-			Display_Status(mec);
-			break;
-		case CommandSettingsTempo:
-			if (mec->number == -1) {
-				Display_Tempo(mec);
-				mec->number = 0;
-				return;
-			}
-			else if (mec->number == 0) {
-				return;
-			}
-			else {
-				Set_Tempo(mec, mec->number);
-			}
-			break;
-		case CommandSettingsVol:
-			if (mec->number == -1) {
-				Display_Volume(mec);
-				mec->number = 0;
-				return;
-			}
-			else if (mec->number == 0) {
-				return;
-			}
-			else {
-				Set_Volume(mec, mec->number);
-			}
-			break;
-		default: break;
+void Handle_Command_Resume(MusicEngineController* mec) {
+	Resume_Song(mec);
+}
+
+void Handle_Command_Stop(MusicEngineController* mec) {
+	Stop_Song(mec);
+}
+
+void Handle_Command_Skip(MusicEngineController* mec) {
+	Skip_Song(mec);
+}
+
+void Handle_Command_Clear(MusicEngineController* mec) {
+	SongQueue_Clear(&(mec->queue));
+}
+
+void Handle_Command_Play(MusicEngineController* mec) {
+	if (mec->number == -1) {
+		Display_Songs(mec);
+		mec->number = 0;
+		return;
 	}
-	mec->commandSettings = CommandSettingsNone;
+	else if (mec->number == 0) {
+		return;
+	}
+	else if (1 <= mec->number && mec->number <= 3) {
+		Play_Song(mec, mec->number - 1);
+	}
+}
+
+void Handle_Command_Queue(MusicEngineController* mec) {
+	if (mec->number == -1) {
+		Display_Songs(mec);
+		mec->number = 0;
+		return;
+	}
+	else if (mec->number == 0) {
+		return;
+	}
+	else if (1 <= mec->number && mec->number <= 3) {
+		Queue_Song(mec, mec->number - 1);
+	}
+}
+
+void Handle_Command_Tempo(MusicEngineController* mec) {
+
+}
+
+void Handle_Command_Volume(MusicEngineController* mec) {
+
+}
+
+void Handle_Command_Status(MusicEngineController* mec) {
+
 }
 
 int16_t Play_Song(MusicEngineController* mec, uint16_t idx) {
