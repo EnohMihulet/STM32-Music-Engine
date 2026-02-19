@@ -18,6 +18,7 @@ typedef struct UartRxBufferController {
 
 	char command[32];
 	uint16_t commandIndex;
+	CommandCode lastCC;
 } UartRxBufferController;
 
 void UartBufferController_Init(UartRxBufferController* urbc);
@@ -26,4 +27,8 @@ void Uart_Update(UartRxBufferController* urbc, MusicEngineController* mec);
 
 void Update_MusicEngine_Command(UartRxBufferController* urbc, MusicEngineController* mec, char* command);
 
-#endif /* APP_UART_CLI_H */
+void Update_LastCommandCode(UartRxBufferController* urbc, CommandCode cc);
+
+uint16_t echo(char* s, uint16_t len);
+
+#endif

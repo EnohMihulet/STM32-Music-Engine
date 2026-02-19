@@ -1,51 +1,51 @@
 #ifndef APP_MUSIC_ENGINE_H
 #define APP_MUSIC_ENGINE_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 
 #include "buzzer.h"
+#include "queue.h"
 
-#define TITLE_MAX_CAPACITY 16
-#define FRAMES_MAX_CAPACITY 80
+#define TITLE_CAPACITY 16
+#define FRAMES_CAPACITY 80
+#define SONG_QUEUE_CAPACITY 16
+#define COMMAND_QUEUE_CAPACITY 15
 
 #define SONG_COUNT 3
-#define SONG_QUEUE_CAPACITY 16
 
 #define LIST_OF_COMMANDS \
-    X(Command_None, "NONE") \
-    X(Command_Pause, "PAUSE") \
-    X(Command_Resume, "RESUME") \
-    X(Command_Stop, "STOP") \
-    X(Command_Skip, "SKIP") \
-    X(Command_Clear, "CLEAR") \
-    X(Command_Play, "STOP") \
-    X(Command_Queue, "QUEUE") \
-    X(Command_Tempo, "TEMPO") \
-    X(Command_Volume, "VOLUME") \
-    X(Command_Status, "STATUS") \
+	X(Command_None,   "NONE")   \
+	X(Command_Pause,  "PAUSE")  \
+	X(Command_Resume, "RESUME") \
+	X(Command_Stop,   "STOP")   \
+	X(Command_Skip,   "SKIP")   \
+	X(Command_Clear,  "CLEAR")  \
+	X(Command_Songs,  "SONGS")  \
+	X(Command_Play,   "PLAY")   \
+	X(Command_Queue,  "QUEUE")  \
+	X(Command_Tempo,  "TEMPO")  \
+	X(Command_Volume, "VOLUME") \
+	X(Command_Status, "STATUS")
 
 #define X(COMMAND, COMMAND_STR) COMMAND,
-
-typedef enum Command {
+typedef enum CommandCode {
 	LIST_OF_COMMANDS
 	COMMAND_COUNT
-} Command;
-
+} CommandCode;
 #undef X
 
 #define X(COMMAND, COMMAND_STR) COMMAND_STR,
-
-static const char* COMMAND_STRINGS[] = {
+static const char* const COMMAND_STRINGS[COMMAND_COUNT] = {
 	LIST_OF_COMMANDS
 };
-
 #undef X
 
 typedef struct Song {
-	char title[TITLE_MAX_CAPACITY];
+	char title[TITLE_CAPACITY];
 	uint16_t framesSize;
-	Frame frames[FRAMES_MAX_CAPACITY];
+	Frame frames[FRAMES_CAPACITY];
 } Song;
 
 static const Song SONG_1 = {
@@ -68,37 +68,29 @@ static const Song SONG_3 = {
 
 static const Song SONGS[SONG_COUNT] = {SONG_1, SONG_2, SONG_3};
 
-typedef struct SongQueue {
-	uint16_t size;
-	uint16_t buffer[SONG_QUEUE_CAPACITY];
-} SongQueue;
+typedef struct Command {
+	CommandCode cc;
+	int32_t arg;
+} Command;
+
+QUEUE_DECLARE(SongQueue, uint16_t, SONG_QUEUE_CAPACITY)
+
+QUEUE_DECLARE(CommandQueue, Command, COMMAND_QUEUE_CAPACITY)
 
 typedef struct MusicEngineController {
-	Command command;
-
 	bool isPlaying;
 	bool isPaused;
 
 	uint16_t songIdx;
 	int16_t frameIdx;
 
-	int16_t number;
-
 	uint16_t volume;
 	uint16_t tempo;
 	
 	BuzzerController buzzer;
-	SongQueue queue;
+	CommandQueue commandQueue;
+	SongQueue songQueue;
 } MusicEngineController;
-
-void SongQueue_Init(SongQueue* q);
-
-int16_t SongQueue_Push(SongQueue* q, uint16_t s);
-int16_t SongQueue_Pop(SongQueue* q, uint16_t* s);
-int16_t SongQueue_Front(SongQueue* q, uint16_t* s);
-bool SongQueue_IsFull(SongQueue* q);
-bool SongQueue_IsEmpty(SongQueue* q);
-void SongQueue_Clear(SongQueue* q);
 
 void MusicEngineController_Init(MusicEngineController* mec);
 
@@ -108,16 +100,16 @@ void Handle_Command(MusicEngineController* mec);
 
 void Handle_PlayCommand(MusicEngineController* mec);
 
-void Handle_Command_Pause(MusicEngineController* mec);
-void Handle_Command_Resume(MusicEngineController* mec);
-void Handle_Command_Stop(MusicEngineController* mec);
-void Handle_Command_Skip(MusicEngineController* mec);
-void Handle_Command_Clear(MusicEngineController* mec);
-void Handle_Command_Play(MusicEngineController* mec);
-void Handle_Command_Queue(MusicEngineController* mec);
-void Handle_Command_Tempo(MusicEngineController* mec);
-void Handle_Command_Volume(MusicEngineController* mec);
-void Handle_Command_Status(MusicEngineController* mec);
+void Handle_Command_Pause(MusicEngineController* mec, Command c);
+void Handle_Command_Resume(MusicEngineController* mec, Command c);
+void Handle_Command_Stop(MusicEngineController* mec, Command c);
+void Handle_Command_Skip(MusicEngineController* mec, Command c);
+void Handle_Command_Clear(MusicEngineController* mec, Command c);
+void Handle_Command_Play(MusicEngineController* mec, Command c);
+void Handle_Command_Queue(MusicEngineController* mec, Command c);
+void Handle_Command_Tempo(MusicEngineController* mec, Command c);
+void Handle_Command_Volume(MusicEngineController* mec, Command c);
+void Handle_Command_Status(MusicEngineController* mec, Command c);
 
 int16_t Play_Song(MusicEngineController* mec, uint16_t idx);
 int16_t Queue_Song(MusicEngineController* mec, uint16_t idx);
