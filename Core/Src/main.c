@@ -105,6 +105,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
 	gUartBufferController.rxBuffer = malloc(UART_RX_BUFFER_SIZE);
@@ -117,6 +118,8 @@ int main(void)
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartBufferController.rxBuffer, UART_RX_BUFFER_SIZE);
 	__HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
 	__HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_TC);
+
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,6 +136,8 @@ int main(void)
 		ButtonEvent e = Button_GetEvent(&gButton);
 		if (e == ButtonEventSingleClick) {
 			HAL_UART_Transmit(&huart2, (uint8_t*)pressed_msg, sizeof(pressed_msg)-1, 100);
+
+			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 		}
 		if (e == ButtonEventDoubleClick) {
 			HAL_UART_Transmit(&huart2, (uint8_t*)double_click_msg, sizeof(double_click_msg)-1, 100);
@@ -218,8 +223,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	if (htim->Instance != TIM2) return;
+	if (gMusicEngineController.pbState != Playing) return;
 
-	if (gMusicEngineController.buzzer.isPlaying && gMusicEngineController.buzzer.currFrame.durationMs > 0) gMusicEngineController.buzzer.currFrame.durationMs -= 1;
+	if (gMusicEngineController.remainingTimeMs != 0) gMusicEngineController.remainingTimeMs -= 1;
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart2, uint16_t size) {

@@ -4,31 +4,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct Frame {
-	uint16_t frequencyHz;
-	uint16_t durationMs;
-} Frame;
+#define GATE_FREQUENCY_HZ 500
+#define GATE_PERIOD_MS 1 / GATE_FREQUENCY_HZ
 
 typedef struct BuzzerController {
-	float duty;
-	volatile Frame currFrame;
-	Frame nextFrame;
-	bool isPlaying;
-	bool needNextFrame;
+	volatile uint16_t frequencyHz;
+	volatile uint8_t volumePct;
+	volatile bool enabled;
+	volatile uint16_t accumulator; // For volume gating
 } BuzzerController;
 
-void BuzzerController_Init(BuzzerController* bc);
+void Buzzer_Init(BuzzerController* bc);
 
 void Buzzer_Update(BuzzerController* bc);
 
-uint16_t Get_Frequency(BuzzerController* bc);
-uint16_t Get_Duration(BuzzerController* bc);
-
-int16_t Duty_Update(BuzzerController* bc, uint16_t volume);
-int16_t CurrFrame_Update(BuzzerController* bc);
-int16_t Set_Frequency(BuzzerController* bc, uint16_t freqHz);
+int16_t Buzzer_SetVolume(BuzzerController* bc, uint8_t volumePct);
+int16_t Buzzer_SetTone(BuzzerController* bc, uint16_t frequencyHz);
 
 void Buzzer_On(BuzzerController* bc);
 void Buzzer_Off(BuzzerController* bc);
+
+int16_t Buzzer_Start(BuzzerController* bc, uint16_t frequencyHz);
+void Buzzer_Stop(BuzzerController* bc);
 
 #endif /* APP_BUZZER_H */

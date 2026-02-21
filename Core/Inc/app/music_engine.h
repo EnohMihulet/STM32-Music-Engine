@@ -42,6 +42,12 @@ static const char* const COMMAND_STRINGS[COMMAND_COUNT] = {
 };
 #undef X
 
+typedef struct Frame {
+	uint16_t frequencyHz;
+	uint16_t durationMs;
+} Frame;
+
+
 typedef struct Song {
 	char title[TITLE_CAPACITY];
 	uint16_t framesSize;
@@ -51,19 +57,19 @@ typedef struct Song {
 static const Song SONG_1 = {
 	.title = "SONG1",
 	.framesSize = 1,
-	.frames = {{988, 15000}}
+	.frames = {{988, 1000}}
 };
 
 static const Song SONG_2 = {
 	.title = "SONG2",
 	.framesSize = 1,
-	.frames = {{659, 15000}}
+	.frames = {{659, 1000}}
 };
 
 static const Song SONG_3 = {
 	.title = "SONG3",
 	.framesSize = 1,
-	.frames = {{392, 15000}}
+	.frames = {{392, 1000}}
 };
 
 static const Song SONGS[SONG_COUNT] = {SONG_1, SONG_2, SONG_3};
@@ -77,14 +83,16 @@ QUEUE_DECLARE(SongQueue, uint16_t, SONG_QUEUE_CAPACITY)
 
 QUEUE_DECLARE(CommandQueue, Command, COMMAND_QUEUE_CAPACITY)
 
+typedef enum PlaybackState {Stopped, Playing, Paused} PlaybackState;
+
 typedef struct MusicEngineController {
-	bool isPlaying;
-	bool isPaused;
+	PlaybackState pbState;
 
 	uint16_t songIdx;
-	int16_t frameIdx;
+	uint16_t frameIdx;
+	Frame currFrame;
+	volatile uint16_t remainingTimeMs;
 
-	uint16_t volume;
 	uint16_t tempo;
 	
 	BuzzerController buzzer;
@@ -109,7 +117,6 @@ void Handle_Command_Play(MusicEngineController* mec, Command c);
 void Handle_Command_Queue(MusicEngineController* mec, Command c);
 void Handle_Command_Tempo(MusicEngineController* mec, Command c);
 void Handle_Command_Volume(MusicEngineController* mec, Command c);
-void Handle_Command_Status(MusicEngineController* mec, Command c);
 
 int16_t Play_Song(MusicEngineController* mec, uint16_t idx);
 int16_t Queue_Song(MusicEngineController* mec, uint16_t idx);

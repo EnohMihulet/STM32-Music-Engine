@@ -56,4 +56,10 @@
 	static inline void NAME##_Clear(NAME* q) { \
 		q->head = q->tail = q->size = 0; \
 		memset(q->buffer, 0, CAPACITY * sizeof(TYPE)); \
-	}
+	} \
+		\
+	static inline uint16_t NAME##_At(NAME* q, uint16_t idx, TYPE* out) { \
+		if (idx >= q->size) return -1; \
+		if (out) *out = q->buffer[q->head + idx % CAPACITY]; \
+		return 0; \
+	} \
