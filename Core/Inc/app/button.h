@@ -1,8 +1,10 @@
 #ifndef APP_BUTTON_H
 #define APP_BUTTON_H
+#pragma once
 
 #include <stdint.h>
 
+#include "music_engine.h"
 
 static const uint16_t DEBOUNCE_TIME = 50;
 
@@ -10,8 +12,7 @@ static const uint16_t DOUBLE_CLICK_TIME = 200;
 static const uint16_t SHORT_CLICK_TIME = 400;
 static const uint16_t HOLD_TIME = 700;
 
-typedef enum { ButtonStateIdle=0, ButtonStateDown1, ButtonStateWait, ButtonStateDown2, ButtonStateSingle=4, ButtonStateDouble=5, ButtonStateHold=6} ButtonState;
-typedef enum { ButtonEventNone=3, ButtonEventSingleClick=4, ButtonEventDoubleClick=5, ButtonEventHold=6 } ButtonEvent;
+typedef enum { ButtonStateIdle=0, ButtonStateDown1, ButtonStateWait, ButtonStateDown2} ButtonState;
 
 typedef struct Button {
 	volatile uint8_t isDown;
@@ -27,8 +28,6 @@ typedef struct Button {
 
 void Button_Init(Button* b);
 
-void Button_Update(Button* b);
-
-ButtonEvent Button_GetEvent(Button* b);
+void Button_Update(Button* b, MusicEngineController* mec);
 
 #endif /* APP_BUTTON_H */

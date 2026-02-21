@@ -6,13 +6,10 @@
 #include "music_engine.h"
 
 #define UART_RX_BUFFER_SIZE 256
-#define INGEST_BUFFER_SIZE 256
 
 typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
-
-	uint8_t ingestBuffer[INGEST_BUFFER_SIZE];
 	uint8_t* rxBuffer;
 
 	char command[32];

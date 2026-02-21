@@ -1,6 +1,9 @@
 #include "../../Inc/main.h"
-#include "../../Inc/app/button.h"
+
 #include <stdbool.h>
+
+#include "../../Inc/app/button.h"
+#include "../../Inc/app/music_engine.h"
 
 void Button_Init(Button* b) {
 	uint32_t primask = __get_PRIMASK();
@@ -16,7 +19,7 @@ void Button_Init(Button* b) {
 
 }
 
-void Button_Update(Button* b) {
+void Button_Update(Button* b, MusicEngineController* mec) {
 	uint8_t pressedCount, releasedCount;
 	uint32_t pressedAt, releasedAt;
 
@@ -41,44 +44,49 @@ void Button_Update(Button* b) {
 		} break;
 	case ButtonStateDown1:
 		if (released) {
-			if ((releasedAt - pressedAt) <= SHORT_CLICK_TIME) b->buttonState = ButtonStateWait;
-			else b->buttonState = ButtonStateSingle;
+			if ((releasedAt - pressedAt) > SHORT_CLICK_TIME) {
+				// Confirmed single click
+				b->buttonState = ButtonStateIdle;
+				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
+				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+			}
+			else b->buttonState = ButtonStateWait;
 		} 
 		else if ((HAL_GetTick() - pressedAt) >= HOLD_TIME) {
-			b->buttonState = ButtonStateHold;
+			// Confirmed hold
+			b->buttonState = ButtonStateIdle;
+			CommandQueue_Push(&mec->commandQueue, (Command){Command_Clear, 0});
 		} break;
 	case ButtonStateWait:
 		if (pressed) {
-			if ((pressedAt - releasedAt) <= DOUBLE_CLICK_TIME) b->buttonState = ButtonStateDown2;
-			else b->buttonState = ButtonStateSingle;
+			if ((pressedAt - releasedAt) > DOUBLE_CLICK_TIME) {
+				// Confirmed single click
+				b->buttonState = ButtonStateIdle;
+				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
+				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+			}
+			else b->buttonState = ButtonStateDown2;
 		}
 		else if ((HAL_GetTick() - releasedAt) > DOUBLE_CLICK_TIME) {
-			b->buttonState = ButtonStateSingle;
+			// Confirmed single click
+			b->buttonState = ButtonStateIdle;
+			CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
+			CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
 		} break;
 	case ButtonStateDown2:
 		if (released) {
-			if ((releasedAt - pressedAt) <= SHORT_CLICK_TIME) b->buttonState = ButtonStateDouble;
-			else b->buttonState = ButtonStateSingle;
+			if ((releasedAt - pressedAt) <= SHORT_CLICK_TIME) {
+				// Confirmed double click
+				b->buttonState = ButtonStateIdle;
+				CommandQueue_Push(&mec->commandQueue, (Command){Command_Skip, 0});
+			}
+			else {
+				// Confirmed single click
+				b->buttonState = ButtonStateIdle;
+				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
+				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+			}
 		} break;
 	default: break;
-	}
-
-}
-
-ButtonEvent Button_GetEvent(Button* b) {
-	switch(b->buttonState) {
-		case ButtonStateIdle: case ButtonStateDown1: case ButtonStateWait: case ButtonStateDown2:
-			return ButtonEventNone;
-		case ButtonStateSingle:
-			b->buttonState = ButtonStateIdle;
-			return ButtonEventSingleClick;
-		case ButtonStateDouble:
-			b->buttonState = ButtonStateIdle;
-			return ButtonEventDoubleClick;
-		case ButtonStateHold:
-			b->buttonState = ButtonStateIdle;
-			return ButtonEventHold;
-		default:
-			return ButtonEventNone;
 	}
 }

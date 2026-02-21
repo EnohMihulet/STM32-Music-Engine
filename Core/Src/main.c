@@ -130,21 +130,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		Uart_Update(&gUartCLIController, &gMusicEngineController);
-		Button_Update(&gButton);
+		Button_Update(&gButton, &gMusicEngineController);
 		MusicEngine_Update(&gMusicEngineController);
-
-		ButtonEvent e = Button_GetEvent(&gButton);
-		if (e == ButtonEventSingleClick) {
-			HAL_UART_Transmit(&huart2, (uint8_t*)pressed_msg, sizeof(pressed_msg)-1, 100);
-
-			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-		}
-		if (e == ButtonEventDoubleClick) {
-			HAL_UART_Transmit(&huart2, (uint8_t*)double_click_msg, sizeof(double_click_msg)-1, 100);
-		}
-		if (e == ButtonEventHold) {
-			HAL_UART_Transmit(&huart2, (uint8_t*)hold_msg, sizeof(hold_msg)-1, 100);
-		}
 
 		Buzzer_Update(&(gMusicEngineController.buzzer));
 	}
@@ -236,20 +223,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart2, uint16_t size) {
 	if (huart2->Instance != USART2) return;
 	if (HAL_UARTEx_GetRxEventType(huart2) != HAL_UART_RXEVENT_IDLE) return;
 
-	uint16_t currPos = size;
-	uint16_t lastPos = gUartCLIController.lastPos;
-
-	if (lastPos == currPos) return;
-
-	if (lastPos < currPos) {
-		memcpy((uint8_t*)gUartCLIController.ingestBuffer + lastPos, gUartCLIController.rxBuffer + lastPos, currPos - lastPos);
-	}
-	else {
-		memcpy((uint8_t*)gUartCLIController.ingestBuffer + lastPos, gUartCLIController.rxBuffer + lastPos, UART_RX_BUFFER_SIZE - lastPos);
-		memcpy((uint8_t*)gUartCLIController.ingestBuffer, gUartCLIController.rxBuffer, currPos);
-	}
-
-	gUartCLIController.currPos = currPos;
+	gUartCLIController.currPos = size;
 }
 
 /* USER CODE END 4 */

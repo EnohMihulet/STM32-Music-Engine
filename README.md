@@ -12,6 +12,27 @@ Build:
     Build in IDE
     Flash using ST-LINK
 
+Controls:
+    Blue Button (B1 / PC13)
+        The blue USER button is used to control playback:
+            -Single press: Pause / Resume
+            -Double press: Skip to next song
+            -Hold: Clear the song queue
+    USART Command Interface
+        Commands can be sent over USART2 as ASCII text. Each command must be terminated with newline (\n) or carriage return (\r). Input is case-insensitive.
+        Commands:
+            -PAUSE - pause playback
+            -RESUME - resume playback
+            -STOP - stop playback
+            -SKIP - skip to the next song
+            -CLEAR - clear the song queue
+            -SONGS - list available songs
+            -PLAY x - play song index x
+            -QUEUE x - enqueue song index x
+            -TEMPO x - set tempo (Not implemented)
+            -VOLUME x - set volume as %
+            -STATUS - print current playback/engine status
+
 Wiring: 
     Pins used:
         -PA6 (TIM3_CH1) = Tone output

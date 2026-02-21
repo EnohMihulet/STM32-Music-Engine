@@ -31,12 +31,11 @@ void Uart_Update(UartCLIController* ucc, MusicEngineController* mec) {
 
 	if (start < end) {
 		for (uint16_t i = start; i < end; i++) {
-
-			char nextChar = toupper((uint8_t)ucc->ingestBuffer[i++]);
+			char nextChar = toupper((uint8_t)ucc->rxBuffer[i]);
 			Append_To_CommandBuffer(ucc, nextChar);
 			if (nextChar != '\b' && nextChar != 0x7F) echo(&nextChar, 1);
 
-			newLastPos = i;
+			newLastPos = i + 1;
 
 			if (nextChar == '\n' || nextChar == '\r') {
 				gotLine = true;
@@ -45,12 +44,12 @@ void Uart_Update(UartCLIController* ucc, MusicEngineController* mec) {
 		}
 	}
 	else if (start > end) {
-		uint16_t len = INGEST_BUFFER_SIZE - start + end;
+		uint16_t len = UART_RX_BUFFER_SIZE - start + end;
 		uint16_t i = start;
 		for (uint16_t k = 0; k < len; k++) {
-			if (i == INGEST_BUFFER_SIZE) i = 0;
+			if (i == UART_RX_BUFFER_SIZE) i = 0;
 
-			char nextChar = toupper((uint8_t)ucc->ingestBuffer[i++]);
+			char nextChar = toupper((uint8_t)ucc->rxBuffer[i++]);
 			Append_To_CommandBuffer(ucc, nextChar);
 			if (nextChar != '\b' && nextChar != 0x7F) echo(&nextChar, 1);
 
@@ -63,10 +62,7 @@ void Uart_Update(UartCLIController* ucc, MusicEngineController* mec) {
 		}
 	}
 
-	primask = __get_PRIMASK();
-	__disable_irq();
-	ucc->lastPos = newLastPos;
-	__set_PRIMASK(primask);
+	ucc->lastPos = newLastPos % UART_RX_BUFFER_SIZE;
 
 	if (!gotLine) {
 		return;
