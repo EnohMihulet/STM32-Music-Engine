@@ -11,11 +11,12 @@
 
 void MusicEngineController_Init(MusicEngineController* mec) {
 	mec->pbState = Stopped;
+	mec->remainingTimeMs = 0;
+	mec->updateFrame = false;
 
 	mec->songIdx = SONG_COUNT;
 	mec->frameIdx = 0;
 	mec->currFrame = (Frame){0,0};
-	mec->remainingTimeMs = 0;
 
 	mec->tempo = 0;
 
@@ -27,31 +28,28 @@ void MusicEngineController_Init(MusicEngineController* mec) {
 void MusicEngine_Update(MusicEngineController* mec) {
 	Handle_Command(mec);
 
-	uint32_t primask = __get_PRIMASK();
-	__disable_irq();
-	uint16_t remainingTimeMs = mec->remainingTimeMs;
-	__set_PRIMASK(primask);
+	if (mec->updateFrame) {
+		if (mec->pbState == Playing) {
+			uint16_t nextFrameIdx = mec->frameIdx + 1;
+			if (nextFrameIdx >= SONGS[mec->songIdx].framesSize) {
+				Stop_Song(mec);
 
+				uint16_t songIdx;
+				if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) return;
+			
+				Play_Song(mec, songIdx);
+				return;
+			}
 
-	if (remainingTimeMs == 0) {
-		if (mec->frameIdx == SONGS[mec->songIdx].framesSize) {
-			Stop_Song(mec);
-
-			uint16_t songIdx;
-			if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) return;
-		
-			Play_Song(mec, songIdx);
-			return;
-		}
-		
-		if (mec->pbState == Playing) { 
-			mec->frameIdx += 1;
+			mec->frameIdx = nextFrameIdx;
 			mec->currFrame = SONGS[mec->songIdx].frames[mec->frameIdx];
-
-			uint32_t primask = __get_PRIMASK();
-			__disable_irq();
 			mec->remainingTimeMs = mec->currFrame.durationMs;
-			__set_PRIMASK(primask);
+
+			if (mec->currFrame.durationMs == 0) {
+				mec->updateFrame = true;
+				return;
+			}
+			else mec->updateFrame = false;
 
 			Buzzer_Start(&mec->buzzer, mec->currFrame.frequencyHz);
 		}
@@ -139,11 +137,13 @@ int16_t Play_Song(MusicEngineController* mec, uint16_t idx) {
 	mec->songIdx = idx;
 	mec->frameIdx = 0;
 	mec->currFrame = song->frames[0];
-
-	uint32_t primask = __get_PRIMASK();
-	__disable_irq();
 	mec->remainingTimeMs = mec->currFrame.durationMs;
-	__set_PRIMASK(primask);
+
+	if (mec->currFrame.durationMs == 0) {
+		mec->updateFrame = true;
+		return 0;
+	}
+	else mec->updateFrame = false;
 
 	Buzzer_Start(&mec->buzzer, mec->currFrame.frequencyHz);
 
@@ -152,11 +152,12 @@ int16_t Play_Song(MusicEngineController* mec, uint16_t idx) {
 
 void Stop_Song(MusicEngineController* mec) {
 	mec->pbState = Stopped;
+	mec->remainingTimeMs = 0;
+	mec->updateFrame = false;
 
 	mec->songIdx = SONG_COUNT;
 	mec->frameIdx = 0;
 	mec->currFrame = (Frame){0,0};
-	mec->remainingTimeMs = 0;
 
 	Buzzer_Stop(&mec->buzzer);
 }
@@ -164,7 +165,8 @@ void Stop_Song(MusicEngineController* mec) {
 int16_t Queue_Song(MusicEngineController* mec, uint16_t idx) {
 	if (idx >= SONG_COUNT) return -1;
 
-	if (SongQueue_Push(&(mec->songQueue), idx) == -1) return -1;
+	if (mec->pbState == Stopped) Play_Song(mec, idx);
+	else if (SongQueue_Push(&(mec->songQueue), idx) == -1) return -1;
 
 	return 0;
 }

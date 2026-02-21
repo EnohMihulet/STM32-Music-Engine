@@ -8,10 +8,9 @@
 #define GATE_PERIOD_MS 1 / GATE_FREQUENCY_HZ
 
 typedef struct BuzzerController {
-	volatile uint16_t frequencyHz;
-	volatile uint8_t volumePct;
-	volatile bool enabled;
-	volatile uint16_t accumulator; // For volume gating
+	uint16_t frequencyHz;
+	uint8_t volumePct;
+	bool enabled;
 } BuzzerController;
 
 void Buzzer_Init(BuzzerController* bc);

@@ -69,7 +69,7 @@ static const Song SONG_2 = {
 static const Song SONG_3 = {
 	.title = "SONG3",
 	.framesSize = 1,
-	.frames = {{392, 1000}}
+	.frames = {{392, 10000}}
 };
 
 static const Song SONGS[SONG_COUNT] = {SONG_1, SONG_2, SONG_3};
@@ -86,12 +86,13 @@ QUEUE_DECLARE(CommandQueue, Command, COMMAND_QUEUE_CAPACITY)
 typedef enum PlaybackState {Stopped, Playing, Paused} PlaybackState;
 
 typedef struct MusicEngineController {
-	PlaybackState pbState;
+	volatile PlaybackState pbState;
+	volatile uint16_t remainingTimeMs;
+	volatile bool updateFrame;
 
 	uint16_t songIdx;
 	uint16_t frameIdx;
 	Frame currFrame;
-	volatile uint16_t remainingTimeMs;
 
 	uint16_t tempo;
 	

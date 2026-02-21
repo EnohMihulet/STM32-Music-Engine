@@ -53,7 +53,7 @@
 
 /* USER CODE BEGIN PV */
 Button gButton;
-UartRxBufferController gUartBufferController;
+UartCLIController gUartCLIController;
 MusicEngineController gMusicEngineController;
 
 static const char pressed_msg[] = "Pressed\r\n";
@@ -108,14 +108,14 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-	gUartBufferController.rxBuffer = malloc(UART_RX_BUFFER_SIZE);
+	gUartCLIController.rxBuffer = malloc(UART_RX_BUFFER_SIZE);
 
 	Button_Init(&gButton);
-	UartBufferController_Init(&gUartBufferController);
+	UartCLIController_Init(&gUartCLIController);
 	MusicEngineController_Init(&gMusicEngineController);
 
 	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartBufferController.rxBuffer, UART_RX_BUFFER_SIZE);
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartCLIController.rxBuffer, UART_RX_BUFFER_SIZE);
 	__HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
 	__HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_TC);
 
@@ -129,7 +129,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		Uart_Update(&gUartBufferController, &gMusicEngineController);
+		Uart_Update(&gUartCLIController, &gMusicEngineController);
 		Button_Update(&gButton);
 		MusicEngine_Update(&gMusicEngineController);
 
@@ -225,7 +225,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	if (htim->Instance != TIM2) return;
 	if (gMusicEngineController.pbState != Playing) return;
 
-	if (gMusicEngineController.remainingTimeMs != 0) gMusicEngineController.remainingTimeMs -= 1;
+	if (gMusicEngineController.remainingTimeMs != 0) {
+		gMusicEngineController.remainingTimeMs -= 1;
+
+		if (gMusicEngineController.remainingTimeMs == 0) gMusicEngineController.updateFrame = true;
+	}
 }
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart2, uint16_t size) {
@@ -233,20 +237,19 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart2, uint16_t size) {
 	if (HAL_UARTEx_GetRxEventType(huart2) != HAL_UART_RXEVENT_IDLE) return;
 
 	uint16_t currPos = size;
-	uint16_t lastPos = gUartBufferController.lastPos;
+	uint16_t lastPos = gUartCLIController.lastPos;
 
 	if (lastPos == currPos) return;
 
-	if (lastPos < currPos) { // Circular buffer has not wrapped
-		memcpy((uint8_t*)gUartBufferController.ingestBuffer + lastPos, gUartBufferController.rxBuffer + lastPos, currPos - lastPos);
+	if (lastPos < currPos) {
+		memcpy((uint8_t*)gUartCLIController.ingestBuffer + lastPos, gUartCLIController.rxBuffer + lastPos, currPos - lastPos);
 	}
-	else { // Circular buffer wrapped
-		memcpy((uint8_t*)gUartBufferController.ingestBuffer + lastPos, gUartBufferController.rxBuffer + lastPos, UART_RX_BUFFER_SIZE - lastPos);
-		memcpy((uint8_t*)gUartBufferController.ingestBuffer, gUartBufferController.rxBuffer, currPos);
+	else {
+		memcpy((uint8_t*)gUartCLIController.ingestBuffer + lastPos, gUartCLIController.rxBuffer + lastPos, UART_RX_BUFFER_SIZE - lastPos);
+		memcpy((uint8_t*)gUartCLIController.ingestBuffer, gUartCLIController.rxBuffer, currPos);
 	}
 
-	gUartBufferController.currPos = currPos;
-	gUartBufferController.pending = true;
+	gUartCLIController.currPos = currPos;
 }
 
 /* USER CODE END 4 */

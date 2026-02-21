@@ -8,26 +8,24 @@
 #define UART_RX_BUFFER_SIZE 256
 #define INGEST_BUFFER_SIZE 256
 
-typedef struct UartRxBufferController {
+typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
-	volatile uint8_t pending;
 
-	volatile uint8_t ingestBuffer[INGEST_BUFFER_SIZE];
-	volatile uint8_t* rxBuffer;
+	uint8_t ingestBuffer[INGEST_BUFFER_SIZE];
+	uint8_t* rxBuffer;
 
 	char command[32];
 	uint16_t commandIndex;
-	CommandCode lastCC;
-} UartRxBufferController;
+} UartCLIController;
 
-void UartBufferController_Init(UartRxBufferController* urbc);
+void UartCLIController_Init(UartCLIController* ucc);
 
-void Uart_Update(UartRxBufferController* urbc, MusicEngineController* mec);
+void Uart_Update(UartCLIController* ucc, MusicEngineController* mec);
 
-void Update_MusicEngine_Command(UartRxBufferController* urbc, MusicEngineController* mec, char* command);
+void Append_To_CommandBuffer(UartCLIController* ucc, char c);
 
-void Update_LastCommandCode(UartRxBufferController* urbc, CommandCode cc);
+int16_t Parse_CommandString(UartCLIController* ucc, Command* out);
 
 uint16_t echo(char* s, uint16_t len);
 
