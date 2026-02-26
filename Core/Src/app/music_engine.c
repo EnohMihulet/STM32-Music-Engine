@@ -8,17 +8,20 @@
 #include "../../Inc/app/uart_cli.h"
 #include "../../Inc/app/music_engine.h"
 
-
-void MusicEngineController_Init(MusicEngineController* mec) {
+void MusicEngineController_Init(MusicEngineController* mec, SongList* sl) {
 	mec->pbState = Stopped;
 	mec->remainingTimeMs = 0;
 	mec->updateFrame = false;
 
-	mec->songIdx = SONG_COUNT;
+	mec->songIdx = 0;
 	mec->frameIdx = 0;
 	mec->currFrame = (Frame){0,0};
 
 	mec->tempo = 0;
+
+	mec->composingSong = false;
+	memset(mec->ws, 0, sizeof(WorkingSong));
+	mec->songList = sl;
 
 	Buzzer_Init(&(mec->buzzer));
 	SongQueue_Init(&(mec->songQueue));
@@ -31,7 +34,7 @@ void MusicEngine_Update(MusicEngineController* mec) {
 	if (mec->updateFrame) {
 		if (mec->pbState == Playing) {
 			uint16_t nextFrameIdx = mec->frameIdx + 1;
-			if (nextFrameIdx >= SONGS[mec->songIdx].framesSize) {
+			if (nextFrameIdx >= mec->songList->songs[mec->songIdx]->framesSize) {
 				Stop_Song(mec);
 
 				uint16_t songIdx;
@@ -42,7 +45,7 @@ void MusicEngine_Update(MusicEngineController* mec) {
 			}
 
 			mec->frameIdx = nextFrameIdx;
-			mec->currFrame = SONGS[mec->songIdx].frames[mec->frameIdx];
+			mec->currFrame = mec->songList->songs[mec->songIdx]->frames[mec->frameIdx];
 			mec->remainingTimeMs = mec->currFrame.durationMs;
 
 			if (mec->currFrame.durationMs == 0) {
@@ -69,69 +72,93 @@ void Handle_Command(MusicEngineController* mec) {
 	Command c = {Command_None, -1};
 	if (CommandQueue_Pop(&(mec->commandQueue), &c) == -1) return;
 
+	CommandReturnCode crc = OK;
+
 	switch (c.cc) {
 		case Command_None: break;
-		case Command_Pause: Handle_Command_Pause(mec, c); break;
-		case Command_Resume: Handle_Command_Resume(mec, c); break;
-		case Command_Stop: Handle_Command_Stop(mec, c); break;
-		case Command_Skip: Handle_Command_Skip(mec, c); break;
-		case Command_Clear: Handle_Command_Clear(mec, c); break;
-		case Command_Play: Handle_Command_Play(mec, c); break;
-		case Command_Queue: Handle_Command_Queue(mec, c); break;
-		case Command_Songs: Display_Songs(mec); break;
-		case Command_Tempo: Handle_Command_Tempo(mec, c); break;
-		case Command_Volume: Handle_Command_Volume(mec, c); break;
-		case Command_Status: Display_Status(mec); break;
+		case Command_Pause:	crc = Pause_Song(mec); break;
+		case Command_Resume:	crc = Resume_Song(mec); break;
+		case Command_Stop:	crc = Stop_Song(mec); break;
+		case Command_Skip:	crc = Skip_Song(mec); break;
+		case Command_Clear:	SongQueue_Clear(&mec->songQueue); break;
+		case Command_Play:	crc = Play_Song(mec, (uint16_t)c.u.args1.a1); break;
+		case Command_Queue:	crc = Queue_Song(mec, (uint16_t)c.u.args1.a1); break;
+		case Command_Songs:	Display_Songs(mec); break;
+		case Command_Tempo:	crc = Set_Tempo(mec, c.u.args1.a1); break;
+		case Command_Volume:	Buzzer_SetVolume(&mec->buzzer, c.u.args1.a1); break;
+		case Command_Status:	Display_Status(mec); break;
+		case Command_NewSong:	crc = Handle_Command_NewSong(mec, c); break;
+		case Command_AddNote:	crc = Handle_Command_AddNote(mec, c); break;
+		case Command_AddRest:	crc = Handle_Command_AddRest(mec, c); break;
+		case Command_ListSong:	crc = Handle_Command_ListSong(mec, c); break;
+		case Command_PlaySong:	crc = Handle_Command_PlaySong(mec, c); break;
+		case Command_ClearSong:	crc = Handle_Command_ClearSong(mec, c); break;
+		case Command_Save:	crc = Handle_Command_Save(mec, c); break;
+		case Command_Load:	crc = Handle_Command_Load(mec, c); break;
 		default: break;
 	}
+
+	Handle_Err_Code(crc);
 }
 
-void Handle_Command_Pause(MusicEngineController* mec, Command c) {
-	Pause_Song(mec);
+void Handle_Err_Code(CommandReturnCode crc) {
+	if (crc != OK)
+	Print_CommandReturnCode(crc);
 }
 
-void Handle_Command_Resume(MusicEngineController* mec, Command c) {
-	Resume_Song(mec);
+CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c) {
+	if (mec->composingSong) return ERR_Invalid_State;
+	mec->composingSong = true;
+	strcpy(mec->ws->s.title, c.u.str);
+	return OK;
 }
 
-void Handle_Command_Stop(MusicEngineController* mec, Command c) {
-	Stop_Song(mec);
+CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c) {
+	if (!mec->composingSong) return ERR_Invalid_State;
+	Song* s = &mec->ws->s;
+	s->frames[s->framesSize++] = (Frame){c.u.args2.a1, c.u.args2.a2};
+	return OK;
 }
 
-void Handle_Command_Skip(MusicEngineController* mec, Command c) {
-	Skip_Song(mec);
+CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c) {
+	if (!mec->composingSong) return ERR_Invalid_State;
+	Song* s = &mec->ws->s;
+	s->frames[s->framesSize++] = (Frame){0, c.u.args1.a1};
+	return OK;
 }
 
-void Handle_Command_Clear(MusicEngineController* mec, Command c) {
-	SongQueue_Clear(&(mec->songQueue));
+CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c) {
+	echo("HERE 4", 6);
+	return OK;
 }
 
-void Handle_Command_Play(MusicEngineController* mec, Command c) {
-	if (c.arg == -1)
-		Display_Songs(mec);
-	else
-		Play_Song(mec, c.arg);
+CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c) {
+	echo("HERE 5", 6);
+	return OK;
 }
 
-void Handle_Command_Queue(MusicEngineController* mec, Command c) {
-	if (c.arg == -1)
-		Display_Songs(mec);
-	else
-		Queue_Song(mec, c.arg);}
-
-void Handle_Command_Tempo(MusicEngineController* mec, Command c) {
-	mec->tempo = c.arg;
+CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c) {
+	if (!mec->composingSong) return ERR_Invalid_State;
+	memset(mec->ws->s.frames, 0, mec->ws->s.framesSize);
+	return OK;
 }
 
-void Handle_Command_Volume(MusicEngineController* mec, Command c) {
-	if (c.arg < 0 || c.arg > 100) return;
-	Buzzer_SetVolume(&mec->buzzer, c.arg);
+CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c) {
+	echo("HERE 7", 6);
+	// mec->songList->songs[mec->songList->songCount++] = mec->
+	return OK;
 }
 
-int16_t Play_Song(MusicEngineController* mec, uint16_t idx) {
-	if (idx >= SONG_COUNT) return -1;
+CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c) {
+	echo("HERE 8", 6);
+	return OK;
+}
 
-	const Song* song = &(SONGS[idx]);
+// TODO: Change form idx to song title
+CommandReturnCode Play_Song(MusicEngineController* mec, uint16_t idx) {
+	if (idx >= mec->songList->songCount) return ERR_BadArgument;
+
+	const Song* song = mec->songList->songs[idx];
 
 	mec->pbState = Playing;
 	mec->songIdx = idx;
@@ -141,73 +168,77 @@ int16_t Play_Song(MusicEngineController* mec, uint16_t idx) {
 
 	if (mec->currFrame.durationMs == 0) {
 		mec->updateFrame = true;
-		return 0;
+		return OK;
 	}
 	else mec->updateFrame = false;
 
 	Buzzer_Start(&mec->buzzer, mec->currFrame.frequencyHz);
 
-	return 0;
+	return OK;
 }
 
-void Stop_Song(MusicEngineController* mec) {
+CommandReturnCode Stop_Song(MusicEngineController* mec) {
+	if (mec->pbState == Stopped) return ERR_Invalid_State;
+
 	mec->pbState = Stopped;
 	mec->remainingTimeMs = 0;
 	mec->updateFrame = false;
 
-	mec->songIdx = SONG_COUNT;
+	mec->songIdx = 0;
 	mec->frameIdx = 0;
 	mec->currFrame = (Frame){0,0};
 
 	Buzzer_Stop(&mec->buzzer);
+	return OK;
 }
 
-int16_t Queue_Song(MusicEngineController* mec, uint16_t idx) {
-	if (idx >= SONG_COUNT) return -1;
+// TODO: Change form idx to song title
+CommandReturnCode Queue_Song(MusicEngineController* mec, uint16_t idx) {
+	if (idx >= mec->songList->songCount) return ERR_BadArgument;
 
-	if (mec->pbState == Stopped) Play_Song(mec, idx);
-	else if (SongQueue_Push(&(mec->songQueue), idx) == -1) return -1;
+	if (mec->pbState == Stopped) return Play_Song(mec, idx);
+	else if (SongQueue_Push(&(mec->songQueue), idx) == -1) return ERR_Capacity;
 
-	return 0;
+	return OK;
 }
 
-void Pause_Song(MusicEngineController* mec) {
-	if (mec->pbState == Paused) return;
+CommandReturnCode Pause_Song(MusicEngineController* mec) {
+	if (mec->pbState == Paused) return ERR_Invalid_State;
 	mec->pbState = Paused;
+
 	Buzzer_Stop(&mec->buzzer);
+	return OK;
 }
 
-void Resume_Song(MusicEngineController* mec) {
-	if (mec->pbState != Paused) return;
+CommandReturnCode Resume_Song(MusicEngineController* mec) {
+	if (mec->pbState != Paused) return ERR_Invalid_State;
 	mec->pbState = Playing;
 
 	Buzzer_Start(&mec->buzzer, mec->currFrame.frequencyHz);
+	return OK;
 }
 
-
-void Skip_Song(MusicEngineController* mec) {
-	if (mec->pbState == Stopped) return;
+CommandReturnCode Skip_Song(MusicEngineController* mec) {
+	if (mec->pbState == Stopped) return ERR_Invalid_State;
 
 	Stop_Song(mec);
 
 	uint16_t songIdx;
 	if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) {
 		mec->pbState = Stopped;
-		return;
+		return OK;
 	}
 
 	mec->pbState = Playing;
-	Play_Song(mec, songIdx);
+	return Play_Song(mec, songIdx);
 }
 
 void Display_Status(MusicEngineController* mec) {
-	// Playing: Song Title
-	// In Queue: song 1, song 2, song 3, ...
-	// Volume: 10%, Tempo: 120
+
 	char buf[128];
 	uint8_t len = 0;
 
-	char* songTitle = (char*)SONGS[mec->songIdx].title;
+	char* songTitle = (char*)mec->songList->songs[mec->songIdx]->title;
 
 	if (mec->pbState == Playing || mec->pbState == Paused) {
 		if (mec->pbState == Playing)
@@ -222,11 +253,12 @@ void Display_Status(MusicEngineController* mec) {
 			for (uint16_t i = 0; i < songCount; i++) {
 				uint16_t songIdx = 0;
 				SongQueue_At(&mec->songQueue, i, &songIdx);
-				len += sprintf((char*)buf + len, "%s ", SONGS[songIdx].title);
+				len += sprintf((char*)buf + len, "%s ", mec->songList->songs[songIdx]->title);
 			}
 			if (qSize > 3) len += sprintf((char*)buf + len, "...\r\n");
-			else len += sprintf((char*)buf + len, "\r\n");
-		}
+			else
+                          len += sprintf(len + (char *)buf, "\r\n");
+                }
 	}
 	else {
 		len += sprintf(buf, "Not Playing\r\n");
@@ -240,8 +272,8 @@ void Display_Status(MusicEngineController* mec) {
 }
 
 void Display_Songs(MusicEngineController* mec) {
-	for (uint16_t i = 0; i < SONG_COUNT; i++) {
-		echo((char*)SONGS[i].title, strlen(SONGS[i].title));
+	for (uint16_t i = 0; i < mec->songList->songCount; i++) {
+		echo((char*)mec->songList->songs[i]->title, strlen(mec->songList->songs[i]->title));
 		echo(", ", 2);
 	}
 	echo("\r\n", 2);

@@ -55,6 +55,7 @@
 Button gButton;
 UartCLIController gUartCLIController;
 MusicEngineController gMusicEngineController;
+SongList gSongList;
 
 static const char pressed_msg[] = "Pressed\r\n";
 static const char double_click_msg[] = "Double click\r\n";
@@ -112,7 +113,8 @@ int main(void)
 
 	Button_Init(&gButton);
 	UartCLIController_Init(&gUartCLIController);
-	MusicEngineController_Init(&gMusicEngineController);
+	SongList_Init(&gSongList);
+	MusicEngineController_Init(&gMusicEngineController, &gSongList);
 
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartCLIController.rxBuffer, UART_RX_BUFFER_SIZE);
@@ -129,7 +131,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		Uart_Update(&gUartCLIController, &gMusicEngineController);
+		Uart_Update(&gUartCLIController, &gMusicEngineController.commandQueue);
 		Button_Update(&gButton, &gMusicEngineController);
 		MusicEngine_Update(&gMusicEngineController);
 

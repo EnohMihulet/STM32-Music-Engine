@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define GATE_FREQUENCY_HZ 500
-#define GATE_PERIOD_MS 1 / GATE_FREQUENCY_HZ
+#define FREQUENCY_MAX_HZ 65535
+#define FREQUENCY_MIN_HZ 16
+#define VOLUME_MAX 100
+#define VOLUME_MIN 0
 
 typedef struct BuzzerController {
 	uint16_t frequencyHz;

@@ -1,0 +1,61 @@
+#pragma once
+#include <stdint.h>
+
+#define TITLE_CAPACITY 16
+#define FRAMES_CAPACITY 80
+#define START_SONG_COUNT 3
+#define SONGLIST_START_CAPACITY 6
+
+typedef struct Frame {
+	uint16_t frequencyHz;
+	uint16_t durationMs;
+} Frame;
+
+
+typedef struct Song {
+	char title[TITLE_CAPACITY];
+	uint16_t framesSize;
+	Frame frames[FRAMES_CAPACITY];
+} Song;
+
+typedef struct WorkingSong {
+	Song s;
+} WorkingSong;
+
+typedef struct SongList {
+	uint16_t songCount;
+	uint16_t songCapacity;
+	Song** songs;
+} SongList;
+
+static Song SONG_1 = {
+	.title = "SONG1",
+	.framesSize = 1,
+	.frames = {{988, 1000}}
+};
+
+static Song SONG_2 = {
+	.title = "SONG2",
+	.framesSize = 1,
+	.frames = {{659, 1000}}
+};
+
+static Song SONG_3 = {
+	.title = "SONG3",
+	.framesSize = 1,
+	.frames = {{392, 10000}}
+};
+
+uint16_t WorkingSong_Init(WorkingSong* ws);
+
+void WorkingSong_SetTitle(WorkingSong* ws, char* title);
+
+void WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
+
+void WorkingSong_List(WorkingSong* ws);
+
+void SongList_Init(SongList* sl);
+
+uint16_t SongList_Add(SongList* sl, WorkingSong* ws);
+
+uint16_t SongList_Grow(SongList* sl);

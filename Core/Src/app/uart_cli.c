@@ -16,7 +16,7 @@ void UartCLIController_Init(UartCLIController* ucc) {
 	__set_PRIMASK(primask);
 }
 
-void Uart_Update(UartCLIController* ucc, MusicEngineController* mec) {
+void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 	uint32_t primask = __get_PRIMASK();
 	uint16_t start, end;
 	__disable_irq();
@@ -73,10 +73,13 @@ void Uart_Update(UartCLIController* ucc, MusicEngineController* mec) {
 	}
 	ucc->command[ucc->commandIndex] = '\0';
 
-	Command c;
-	if (Parse_CommandString(ucc, &c) == 0) CommandQueue_Push(&mec->commandQueue, c);
-
 	echo("\r\n", 2);
+
+	Command c;
+	CommandReturnCode crc;
+	crc = Parse_CommandString(ucc, &c);
+	if (crc == OK) CommandQueue_Push(cq, c);
+	else Print_CommandReturnCode(crc);
 
 	memset(ucc->command, 0, sizeof(ucc->command));
 	ucc->commandIndex = 0;
@@ -98,43 +101,96 @@ void Append_To_CommandBuffer(UartCLIController* ucc, char c) {
 	}
 }
 
-int16_t Parse_CommandString(UartCLIController* ucc, Command* out) {
-	CommandCode cc = COMMAND_COUNT;
-	int32_t arg = -1;
-	for (uint16_t i = 0; i < ucc->commandIndex; i++) {
-		char c = ucc->command[i];
-		if (c == ' ') {
-			ucc->command[i] = '\0';
-			for (uint16_t i = 0; i < COMMAND_COUNT; i++) {
-				if (strcmp(ucc->command, COMMAND_STRINGS[i]) == 0) {
-					cc = (CommandCode)i;
-					break;
-				}
-			}
-			if (cc == COMMAND_COUNT) return -1;
+CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
+	char buffer[COMMAND_SEGMENT_COUNT][COMMAND_STRING_CAPACITY];
+	uint16_t segmentCount = 0;
+	uint16_t segmentStart = 0;
 
-			char* endptr;
-			int64_t num = strtol((char*)ucc->command + i + 1, &endptr, 10);
-			if (*endptr == '\0') arg = num;
-			break;
-		}
-		else if (i == ucc->commandIndex - 1) {
-			for (uint16_t i = 0; i < COMMAND_COUNT; i++) {
-				if (strcmp(ucc->command, COMMAND_STRINGS[i]) == 0) {
-					cc = (CommandCode)i;
-					break;
-				}
-			}
-			if (cc == COMMAND_COUNT) return -1;
+	for (uint16_t i = 0; i <= ucc->commandIndex; i++) {
+		char c = ucc->command[i];
+		if (c == ' ' || c == '\0') {
+			ucc->command[i] = '\0';
+			strcpy(buffer[segmentCount], ucc->command + segmentStart);
+			segmentCount += 1;
+			segmentStart = i + 1;
 		}
 	}
-	out->cc = cc;
-	out->arg = arg;
 
+	if (segmentCount == 1) {
+		if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
+		if (COMMAND_ARG_COUNTS[out->cc] != 0) return ERR_ArgumentCount;
+		out->kind = Command_Args0;
+	}
+	else if (segmentCount == 2) {
+		if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
+		if (COMMAND_ARG_COUNTS[out->cc] != 1) return ERR_ArgumentCount;
+
+		char* endptr;
+		int64_t num = strtol((char*)buffer[1], &endptr, 10);
+		if (*endptr == '\0') {
+			out->kind = Command_Args1;
+			out->u.args1.a1 = num;
+			if (out->cc == Command_Volume && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
+			if (out->cc == Command_Tempo && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
+		}
+		else {
+			if (out->cc != Command_Play && out->cc != Command_Queue && out->cc != Command_NewSong) return ERR_BadArgument;
+			out->kind = Command_Str;
+			strcpy(out->u.str, buffer[1]);
+		}
+	}
+	else if (segmentCount == 3 || segmentCount == 4) {
+		if (strcmp(buffer[0], "ADD") != 0) return ERR_UnknownCommand;
+
+		if (strcmp(buffer[1], "NOTE") == 0) {
+			if (segmentCount != 4) return ERR_ArgumentCount;
+			out->cc = Command_AddNote;
+			out->kind = Command_Args2;
+			if (CommandArg_From_String(buffer[2], &out->u.args2.a1) == -1) return ERR_BadNumber;
+			if (CommandArg_From_String(buffer[3], &out->u.args2.a2) == -1) return ERR_BadNumber;
+			if (out->u.args2.a1 > FREQUENCY_MAX_HZ) return ERR_OutOfRange;
+			if (out->u.args2.a1 < FREQUENCY_MIN_HZ) return ERR_OutOfRange;
+			if (out->u.args2.a2 < 0) return ERR_OutOfRange;
+		}
+		else if (strcmp(buffer[1], "REST") == 0) {
+			if (segmentCount != 3) return ERR_ArgumentCount;
+			out->cc = Command_AddRest;
+			out->kind = Command_Args1;
+			if (CommandArg_From_String(buffer[2], &out->u.args1.a1) == -1) return ERR_BadNumber;
+			if (out->u.args1.a1 < 0) return ERR_OutOfRange;
+		}
+		else return ERR_UnknownCommand;
+	}
+	else return ERR_UnknownCommand;
+
+	return OK;
+}
+
+int16_t CommandCode_From_String(char* commandStr, CommandCode* cc) {
+	for (uint16_t i = 0; i < COMMAND_COUNT; i++) {
+		if (strcmp(commandStr, COMMAND_STRINGS[i]) == 0) {
+			*cc = (CommandCode)i;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+int16_t CommandArg_From_String(char* commandStr, int32_t* arg) {
+	char* endptr;
+	int64_t num = strtol(commandStr, &endptr, 10);
+	if (*endptr == '\0') *arg = num;
+	else return -1;
 	return 0;
 }
 
-uint16_t echo(char* s, uint16_t len) {
+void Print_CommandReturnCode(CommandReturnCode crc) {
+	if (crc == COMMAND_RETURN_CODE_COUNT) return;
+	echo(COMMAND_RETURN_CODES[crc], strlen(COMMAND_RETURN_CODES[crc]));
+	echo("\r\n", 2);
+}
+
+int16_t echo(char* s, uint16_t len) {
 	if (len == 0) return -1;
 
 	HAL_UART_Transmit(&huart2, (uint8_t*)s, len, 100);
