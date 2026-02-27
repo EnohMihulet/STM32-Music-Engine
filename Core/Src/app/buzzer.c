@@ -54,6 +54,7 @@ void Buzzer_Off(BuzzerController* bc) {
 }
 
 int16_t Buzzer_Start(BuzzerController* bc, uint16_t frequencyHz) {
+	if (frequencyHz == 0) Buzzer_Stop(bc);
 	bc->enabled = true;
 	if (Buzzer_SetTone(bc, frequencyHz) == -1) return -1;
 	Buzzer_On(bc);

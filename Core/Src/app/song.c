@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -5,30 +6,33 @@
 #include "../../Inc/app/song.h"
 
 uint16_t WorkingSong_Init(WorkingSong* ws) {
-	ws = malloc(sizeof(WorkingSong));
 	if (ws == NULL) return -1;
-	ws->s.framesSize = FRAMES_CAPACITY;
+	ws->s.framesSize = 0;
 	memset(ws->s.title, 0, TITLE_CAPACITY);
 	memset(ws->s.frames, 0, FRAMES_CAPACITY);
 	return 0;
 }
 
-void WorkingSong_SetTitle(WorkingSong* ws, char* title) {
-	if (strlen(title) >= TITLE_CAPACITY) return;
+uint16_t WorkingSong_SetTitle(WorkingSong* ws, char* title) {
+	if (strlen(title) >= TITLE_CAPACITY) return -1;
 	strcpy(ws->s.title, title);
+	return 0;
 }
 
-void WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs) {
+uint16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs) {
+	if (ws == NULL) return -1;
 	ws->s.frames[ws->s.framesSize++] = (Frame){frequencyHz, durationMs};
+	return 0;
 }
 
-void WorkingSong_List(WorkingSong* ws) {
-
+uint16_t WorkingSong_List(WorkingSong* ws) {
+	return 0;
 }
 
 void SongList_Init(SongList* sl) {
+	if (sl == NULL) return;
 	sl->songs = (Song**)malloc(sizeof(SongList*) * SONGLIST_START_CAPACITY);
-	if (sl->songs == NULL) return;
+	assert(sl->songs);
 	sl->songs[0] = &SONG_1;
 	sl->songs[1] = &SONG_2;
 	sl->songs[2] = &SONG_3;

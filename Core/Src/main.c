@@ -54,6 +54,7 @@
 /* USER CODE BEGIN PV */
 Button gButton;
 UartCLIController gUartCLIController;
+BuzzerController gBuzzer;
 MusicEngineController gMusicEngineController;
 SongList gSongList;
 
@@ -114,7 +115,8 @@ int main(void)
 	Button_Init(&gButton);
 	UartCLIController_Init(&gUartCLIController);
 	SongList_Init(&gSongList);
-	MusicEngineController_Init(&gMusicEngineController, &gSongList);
+	Buzzer_Init(&gBuzzer);
+	MusicEngineController_Init(&gMusicEngineController, &gBuzzer, &gSongList);
 
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartCLIController.rxBuffer, UART_RX_BUFFER_SIZE);

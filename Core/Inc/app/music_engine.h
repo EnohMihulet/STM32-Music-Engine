@@ -22,22 +22,22 @@ typedef struct MusicEngineController {
 	volatile uint16_t remainingTimeMs;
 	volatile bool updateFrame;
 
-	uint16_t songIdx;
+	Song* currSong;
 	uint16_t frameIdx;
-	Frame currFrame;
 
 	uint16_t tempo;
 
-	bool composingSong;
+	bool composing;
 	WorkingSong* ws;
 	
 	CommandQueue commandQueue;
 	SongQueue songQueue;
-	BuzzerController buzzer;
+
+	BuzzerController* buzzer;
 	SongList* songList;
 } MusicEngineController;
 
-void MusicEngineController_Init(MusicEngineController* mec, SongList* sl);
+void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc, SongList* sl);
 
 void MusicEngine_Update(MusicEngineController* mec);
 
@@ -54,8 +54,8 @@ CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c);
 
 void Handle_Err_Code(CommandReturnCode crc);
 
-CommandReturnCode Play_Song(MusicEngineController* mec, uint16_t idx);
-CommandReturnCode Queue_Song(MusicEngineController* mec, uint16_t idx);
+CommandReturnCode Play_Song(MusicEngineController* mec, Song* song);
+CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song, uint16_t idx);
 CommandReturnCode Stop_Song(MusicEngineController* mec);
 
 CommandReturnCode Pause_Song(MusicEngineController* mec);

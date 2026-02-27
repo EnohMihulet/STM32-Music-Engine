@@ -30,8 +30,8 @@ typedef struct SongList {
 
 static Song SONG_1 = {
 	.title = "SONG1",
-	.framesSize = 1,
-	.frames = {{988, 1000}}
+	.framesSize = 3,
+	.frames = {{988, 1000}, {0, 1000}, {988, 1000}}
 };
 
 static Song SONG_2 = {
@@ -48,11 +48,11 @@ static Song SONG_3 = {
 
 uint16_t WorkingSong_Init(WorkingSong* ws);
 
-void WorkingSong_SetTitle(WorkingSong* ws, char* title);
+uint16_t WorkingSong_SetTitle(WorkingSong* ws, char* title);
 
-void WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
+uint16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
 
-void WorkingSong_List(WorkingSong* ws);
+uint16_t WorkingSong_List(WorkingSong* ws);
 
 void SongList_Init(SongList* sl);
 
