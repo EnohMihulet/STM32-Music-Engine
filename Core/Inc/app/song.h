@@ -18,14 +18,19 @@ typedef struct Song {
 	Frame frames[FRAMES_CAPACITY];
 } Song;
 
+typedef enum WorkingSong_Kind {
+	WorkingSong_None, WorkingSong_New, WorkingSong_Edit, WorkingSong_Copy
+} WorkingSong_Kind;
+
 typedef struct WorkingSong {
-	Song s;
+	WorkingSong_Kind kind;
+	int16_t idx;
+	Song* s;
 } WorkingSong;
 
 typedef struct SongList {
 	uint16_t songCount;
-	uint16_t songCapacity;
-	Song** songs;
+	uint16_t songCapacity; Song** songs;
 } SongList;
 
 static Song SONG_1 = {
@@ -46,11 +51,15 @@ static Song SONG_3 = {
 	.frames = {{392, 10000}}
 };
 
-void WorkingSong_Init(WorkingSong** ws);
+void WorkingSong_Init(WorkingSong* ws);
+
+int16_t WorkingSong_NewSong(WorkingSong* ws, char* title);
+int16_t WorkingSong_EditSong(WorkingSong* ws, Song* s);
+int16_t WorkingSong_CopySong(WorkingSong* ws, Song* s, char* title);
 
 int16_t WorkingSong_SetTitle(WorkingSong* ws, char* title);
-
 int16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
+int16_t WorkingSong_EditNote(WorkingSong* ws, uint16_t frameIdx, uint16_t frequencyHz, uint16_t durationMs);
 
 int16_t WorkingSong_List(WorkingSong* ws);
 

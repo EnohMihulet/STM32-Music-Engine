@@ -78,7 +78,10 @@ void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 	Command c;
 	CommandReturnCode crc;
 	crc = Parse_CommandString(ucc, &c);
-	if (crc == OK) CommandQueue_Push(cq, c);
+	if (crc == OK) {
+		if (c.cc == Command_Commands) Print_Commands();
+		else CommandQueue_Push(cq, c);
+	}
 	else Print_CommandReturnCode(crc);
 
 	memset(ucc->command, 0, sizeof(ucc->command));
@@ -117,54 +120,60 @@ CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
 		}
 	}
 
-	if (segmentCount == 1) {
-		if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
-		if (COMMAND_ARG_COUNTS[out->cc] != 0) return ERR_ArgumentCount;
-		out->kind = Command_Args0;
-	}
-	else if (segmentCount == 2) {
-		if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
-		if (COMMAND_ARG_COUNTS[out->cc] != 1) return ERR_ArgumentCount;
-
-		if (out->cc == Command_Play || out->cc == Command_Queue || out->cc == Command_NewSong) {
-			out->kind = Command_Str;
-			strcpy(out->u.str, buffer[1]);
+	if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
+	switch (out->cc) {
+		case Command_None: return ERR_UnknownCommand;
+		// ARGS 0
+		case Command_Pause: case Command_Resume: case Command_Stop: case Command_Skip: case Command_Clear: 
+		case Command_Commands: case Command_Songs: case Command_Status: 
+		case Command_ListSong: case Command_PlaySong: case Command_ClearSong: case Command_Save:
+			if (segmentCount != 1) return ERR_ArgumentCount;
+			out->kind = Command_Args0;
 			return OK;
-		}
+		// ARGS 1 STRING
+		case Command_Play: case Command_Queue: 
+		case Command_NewSong: case Command_EditSong: case Command_EditTitle:
+			if (segmentCount != 2) return ERR_ArgumentCount;
+			out->kind = Command_Str1;
+			strcpy(out->u.str1.s, buffer[1]);
+			return OK;
 
-		char* endptr;
-		int64_t num = strtol((char*)buffer[1], &endptr, 10);
-		if (*endptr == '\0') {
-			out->kind = Command_Args1;
-			out->u.args1.a1 = num;
-			if (out->cc == Command_Volume && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
-			if (out->cc == Command_Tempo && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
-		}
-		else return ERR_BadArgument;
-	}
-	else if (segmentCount == 3 || segmentCount == 4) {
-		if (strcmp(buffer[0], "ADD") != 0) return ERR_UnknownCommand;
+		// ARGS 1 NUMBER
+		case Command_Tempo: case Command_Volume: case Command_AddRest:
+			if (segmentCount != 2) return ERR_ArgumentCount;
+			char* endptr;
+			int64_t num = strtol((char*)buffer[1], &endptr, 10);
+			if (*endptr == '\0') {
+				out->kind = Command_Int1;
+				out->u.int1.a1 = num;
+				if (out->cc == Command_Volume && (out->u.int1.a1 < VOLUME_MIN || out->u.int1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
+				if (out->cc == Command_Tempo && (out->u.int1.a1 < VOLUME_MIN || out->u.int1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
+				return OK;
+			}
+			else return ERR_BadArgument;
 
-		if (strcmp(buffer[1], "NOTE") == 0) {
-			if (segmentCount != 4) return ERR_ArgumentCount;
-			out->cc = Command_AddNote;
-			out->kind = Command_Args2;
-			if (CommandArg_From_String(buffer[2], &out->u.args2.a1) == -1) return ERR_BadNumber;
-			if (CommandArg_From_String(buffer[3], &out->u.args2.a2) == -1) return ERR_BadNumber;
-			if (out->u.args2.a1 > FREQUENCY_MAX_HZ) return ERR_OutOfRange;
-			if (out->u.args2.a1 < FREQUENCY_MIN_HZ) return ERR_OutOfRange;
-			if (out->u.args2.a2 < 0) return ERR_OutOfRange;
-		}
-		else if (strcmp(buffer[1], "REST") == 0) {
+			
+		// ARGS 2 
+		case Command_CopySong:
 			if (segmentCount != 3) return ERR_ArgumentCount;
-			out->cc = Command_AddRest;
-			out->kind = Command_Args1;
-			if (CommandArg_From_String(buffer[2], &out->u.args1.a1) == -1) return ERR_BadNumber;
-			if (out->u.args1.a1 < 0) return ERR_OutOfRange;
-		}
-		else return ERR_UnknownCommand;
+			out->kind = Command_Str2;
+			strcpy(out->u.str2.s1, buffer[1]);
+			strcpy(out->u.str2.s2, buffer[2]);
+			return OK;
+		case Command_AddNote:
+			out->kind = Command_Int2;
+			if (CommandArg_From_String(buffer[1], &out->u.int2.a1) == -1) return ERR_BadNumber;
+			if (CommandArg_From_String(buffer[2], &out->u.int2.a2) == -1) return ERR_BadNumber;
+			return OK;
+		// ARGS 3
+		case Command_EditNote:
+			out->kind = Command_Int3;
+			if (CommandArg_From_String(buffer[1], &out->u.int3.a1) == -1) return ERR_BadNumber;
+			if (CommandArg_From_String(buffer[2], &out->u.int3.a2) == -1) return ERR_BadNumber;
+			if (CommandArg_From_String(buffer[3], &out->u.int3.a3) == -1) return ERR_BadNumber;
+			return OK;
+		default: return ERR_UnknownCommand;
 	}
-	else return ERR_UnknownCommand;
 
 	return OK;
 }
@@ -191,6 +200,14 @@ void Print_CommandReturnCode(CommandReturnCode crc) {
 	if (crc == COMMAND_RETURN_CODE_COUNT) return;
 	echo(COMMAND_RETURN_CODES[crc], strlen(COMMAND_RETURN_CODES[crc]));
 	echo("\r\n", 2);
+}
+
+void Print_Commands() {
+	for (uint16_t i = 2; i < COMMAND_COUNT; i++) {
+		const char* c = COMMAND_USAGE[i];
+		echo(c, strlen(c));
+		echo("\r\n", 2);
+	}
 }
 
 int16_t echo(const char* s, uint16_t len) {

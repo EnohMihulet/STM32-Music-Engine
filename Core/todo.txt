@@ -1,7 +1,5 @@
 
 
-
-SongList contains pointers to Songs
-Buzzer does not belong to MusicController, should only have pointer.
-Allocate Songs
+Songs to dynamic array
+Song duplicate titles
 

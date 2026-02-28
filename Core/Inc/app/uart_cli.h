@@ -12,45 +12,64 @@
 #define COMMAND_QUEUE_CAPACITY 15
 #define COMMAND_STRING_CAPACITY 16
 
-#define COMMAND_SEGMENT_COUNT 4
+#define COMMAND_SEGMENT_COUNT 5
+
+#define STR(x) #x
+#define XSTR(x) STR(x)
+
+#define RANGE_STR(min, max) XSTR(min) "-" XSTR(max)
+
+#define VOLUME_RANGE_STR RANGE_STR(VOLUME_MIN, VOLUME_MAX)
+#define FREQHZ_RANGE_STR RANGE_STR(FREQUENCY_MIN_HZ, FREQUENCY_MAX_HZ)
+#define DURMS_RANGE_STR RANGE_STR(DURATION_MIN_MS, DURATION_MAX_MS)
 
 #define LIST_OF_COMMANDS \
-	X(Command_None,		0, "NONE")   \
-	X(Command_Pause,	0, "PAUSE")  \
-	X(Command_Resume,	0, "RESUME") \
-	X(Command_Stop,		0, "STOP")   \
-	X(Command_Skip,		0, "SKIP")   \
-	X(Command_Clear,	0, "CLEAR")  \
-	X(Command_Songs,	0, "SONGS")  \
-	X(Command_Play,		1, "PLAY")   \
-	X(Command_Queue,	1, "QUEUE")  \
-	X(Command_Tempo,	1, "TEMPO")  \
-	X(Command_Volume,	1, "VOLUME") \
-	X(Command_Status,	0, "STATUS") \
-	X(Command_NewSong,	1, "NEWSONG") \
-	X(Command_AddNote,	2, "ADD NOTE") \
-	X(Command_AddRest,	1, "ADD REST") \
-	X(Command_ListSong,	0, "LISTSONG") \
-	X(Command_PlaySong,	0, "PLAYSONG") \
-	X(Command_ClearSong,	0, "CLEARSONG") \
-	X(Command_Save,		0, "SAVE") \
-	X(Command_Load,		0, "LOAD")
+	X(Command_None,		0, "NONE",	"")   \
+	X(Command_Commands,	0, "COMMANDS",	"COMMANDS") \
+	X(Command_Pause,	0, "PAUSE",	"PAUSE")  \
+	X(Command_Resume,	0, "RESUME", 	"RESUME") \
+	X(Command_Stop,		0, "STOP", 	"STOP")   \
+	X(Command_Skip,		0, "SKIP", 	"SKIP")   \
+	X(Command_Clear,	0, "CLEAR", 	"CLEAR")  \
+	X(Command_Songs,	0, "SONGS", 	"SONGS")  \
+	X(Command_Play,		1, "PLAY", 	"PLAY <SONG_TITLE>")   \
+	X(Command_Queue,	1, "QUEUE", 	"QUEUE <SONG_TITLE")  \
+	X(Command_Tempo,	1, "TEMPO", 	"TEMPO <>")  \
+	X(Command_Volume,	1, "VOLUME", 	"VOLUME <" VOLUME_RANGE_STR ">") \
+	X(Command_Status,	0, "STATUS", 	"STATUS") \
+	X(Command_NewSong,	1, "NEWSONG", 	"NEWSONG <NEW_SONG_TITLE>") \
+	X(Command_EditSong,	1, "EDITSONG", 	"EDITSONG <SONG_TITLE>") \
+	X(Command_CopySong,	2, "COPYSONG", 	"COPYSONG <SONG_TITLE> <NEW_SONG_TITLE>") \
+	X(Command_AddNote,	2, "ADDNOTE", 	"ADDNOTE <" FREQHZ_RANGE_STR "> <" DURMS_RANGE_STR ">") \
+	X(Command_AddRest,	1, "ADDREST", 	"ADDREST <" DURMS_RANGE_STR ">") \
+	X(Command_EditNote,	3, "EDITNOTE", "EDITNOTE <FRAME_NUMBER> <" FREQHZ_RANGE_STR "> <" DURMS_RANGE_STR ">") \
+	X(Command_EditTitle,	1, "EDITTITLE","EDITTITLE <NEW_TITLE>") \
+	X(Command_ListSong,	0, "LISTSONG", 	"LISTSONG") \
+	X(Command_PlaySong,	0, "PLAYSONG", 	"PLAYSONG") \
+	X(Command_ClearSong,	0, "CLEARSONG", "CLEARSONG") \
+	X(Command_Save,		0, "SAVE", 	"SAVE") \
 
-#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR) COMMAND,
+#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND,
 typedef enum CommandCode {
 	LIST_OF_COMMANDS
 	COMMAND_COUNT
 } CommandCode;
 #undef X
 
-#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR) COMMAND_ARG_COUNT,
+#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND_ARG_COUNT,
 static const int8_t COMMAND_ARG_COUNTS[COMMAND_COUNT] = {
 	LIST_OF_COMMANDS
 };
 #undef X
 
-#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR) COMMAND_STR,
+#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND_STR,
 static const char* const COMMAND_STRINGS[COMMAND_COUNT] = {
+	LIST_OF_COMMANDS
+};
+#undef X
+
+#define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND_USAGE,
+static const char* const COMMAND_USAGE[COMMAND_COUNT] = {
 	LIST_OF_COMMANDS
 };
 #undef X
@@ -85,9 +104,11 @@ static const char* const COMMAND_RETURN_CODES[COMMAND_RETURN_CODE_COUNT] = {
 
 typedef enum CommandPayloadKind {
 	Command_Args0,
-	Command_Args1,
-	Command_Args2,
-	Command_Str
+	Command_Int1,
+	Command_Int2,
+	Command_Int3,
+	Command_Str1,
+	Command_Str2
 } CommandPayloadKind;
 
 
@@ -97,9 +118,14 @@ typedef struct Command {
 
 	union {
 		struct {} args0;
-		struct { int32_t a1; } args1;
-		struct { int32_t a1, a2; } args2;
-		char str[COMMAND_STRING_CAPACITY];
+		struct { int32_t a1; } int1;
+		struct { int32_t a1, a2; } int2;
+		struct { int32_t a1, a2, a3; } int3;
+		struct { char s[COMMAND_STRING_CAPACITY]; } str1;
+		struct {
+			char s1[COMMAND_STRING_CAPACITY];
+			char s2[COMMAND_STRING_CAPACITY];
+		} str2;
 	} u;
 } Command;
 
@@ -129,6 +155,8 @@ int16_t CommandArg_From_String(char* commandStr, int32_t* arg);
 CommandReturnCode CommandArg_Is_Valid(Command* c);
 
 void Print_CommandReturnCode(CommandReturnCode crc);
+
+void Print_Commands();
 
 int16_t echo(const char* s, uint16_t len);
 

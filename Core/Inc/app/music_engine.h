@@ -26,9 +26,7 @@ typedef struct MusicEngineController {
 
 	uint16_t tempo;
 
-	bool composing;
-	WorkingSong* ws;
-	
+	WorkingSong ws;
 	CommandQueue commandQueue;
 	SongQueue songQueue;
 
@@ -44,14 +42,19 @@ void Handle_Command(MusicEngineController* mec);
 
 CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c);
+
 CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_EditSong(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_CopySong(MusicEngineController* mec, Command c);
+
 CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_EditNote(MusicEngineController* mec, Command c);
+
 CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c);
 
 void Handle_Err_Code(CommandReturnCode crc);
 

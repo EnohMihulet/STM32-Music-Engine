@@ -20,11 +20,9 @@ void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc
 
 	mec->tempo = 0;
 
-	mec->composing = false;
-	mec->ws = NULL;
-
-	SongQueue_Init(&(mec->songQueue));
-	CommandQueue_Init(&(mec->commandQueue));
+	WorkingSong_Init(&mec->ws);
+	SongQueue_Init(&mec->songQueue);
+	CommandQueue_Init(&mec->commandQueue);
 
 	mec->buzzer = bc;
 	mec->songList = sl;
@@ -85,17 +83,22 @@ void Handle_Command(MusicEngineController* mec) {
 		case Command_Play:	crc = Handle_Command_Play(mec, c); break;
 		case Command_Queue:	crc = Handle_Command_Queue(mec, c); break;
 		case Command_Songs:	Display_Songs(mec); break;
-		case Command_Tempo:	crc = Set_Tempo(mec, c.u.args1.a1); break;
-		case Command_Volume:	Buzzer_SetVolume(mec->buzzer, c.u.args1.a1); break;
+		case Command_Tempo:	crc = Set_Tempo(mec, c.u.int1.a1); break;
+		case Command_Volume:	Buzzer_SetVolume(mec->buzzer, c.u.int1.a1); break;
 		case Command_Status:	Display_Status(mec); break;
+
 		case Command_NewSong:	crc = Handle_Command_NewSong(mec, c); break;
+		case Command_EditSong:	crc = Handle_Command_EditSong(mec, c); break;
+		case Command_CopySong:	crc = Handle_Command_CopySong(mec, c); break;
+
 		case Command_AddNote:	crc = Handle_Command_AddNote(mec, c); break;
 		case Command_AddRest:	crc = Handle_Command_AddRest(mec, c); break;
+		case Command_EditNote:	crc = Handle_Command_EditNote(mec, c); break;
+
 		case Command_ListSong:	crc = Handle_Command_ListSong(mec, c); break;
 		case Command_PlaySong:	crc = Handle_Command_PlaySong(mec, c); break;
 		case Command_ClearSong:	crc = Handle_Command_ClearSong(mec, c); break;
 		case Command_Save:	crc = Handle_Command_Save(mec, c); break;
-		case Command_Load:	crc = Handle_Command_Load(mec, c); break;
 		default: break;
 	}
 
@@ -109,60 +112,87 @@ void Handle_Err_Code(CommandReturnCode crc) {
 
 CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c) {
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str, &idx) == -1) return ERR_BadArgument;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
 	return Play_Song(mec, mec->songList->songs[idx]);
 }
 
 CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c) {
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str, &idx) == -1) return ERR_BadArgument;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
 	return Queue_Song(mec, mec->songList->songs[idx]);
 }
 
 CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c) {
-	if (mec->composing) return ERR_Invalid_State;
-	mec->composing = true;
-	WorkingSong_Init(&mec->ws);
-	if (WorkingSong_SetTitle(mec->ws, c.u.str) == -1) return ERR_BadArgument;
+	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
+	if (WorkingSong_NewSong(&mec->ws, c.u.str1.s) == -1) return ERR_BadArgument; // TODO: ERr handling
+	return OK;
+}
+
+CommandReturnCode Handle_Command_EditSong(MusicEngineController* mec, Command c) {
+	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
+	uint16_t idx;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
+	Song* s = mec->songList->songs[idx];
+	if (WorkingSong_EditSong(&mec->ws, s) == -1) return ERR_BadArgument; // TODO: ERr handling
+	mec->ws.idx = idx;
+	return OK;
+}
+
+CommandReturnCode Handle_Command_CopySong(MusicEngineController* mec, Command c) {
+	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
+	uint16_t idx;
+	if (SongList_Find(mec->songList, c.u.str2.s1, &idx) == -1) return ERR_BadArgument;
+	Song* s = mec->songList->songs[idx];
+	if (WorkingSong_CopySong(&mec->ws, s, c.u.str2.s2) == -1) return ERR_BadArgument; // TODO: ERr handling
 	return OK;
 }
 
 CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c) {
-	if (!mec->composing) return ERR_Invalid_State;
-	if (WorkingSong_AddNote(mec->ws, c.u.args2.a1, c.u.args2.a2) != 0) return ERR_Internal;
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	if (WorkingSong_AddNote(&mec->ws, c.u.int2.a1, c.u.int2.a2) == -1) return ERR_Internal;
 	return OK;
 }
 
 CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c) {
-	if (!mec->composing) return ERR_Invalid_State;
-	if (WorkingSong_AddNote(mec->ws, 0, c.u.args1.a1) != 0) return ERR_Internal;
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	if (WorkingSong_AddNote(&mec->ws, 0, c.u.int1.a1) == -1) return ERR_Internal;
+	return OK;
+}
+
+CommandReturnCode Handle_Command_EditNote(MusicEngineController* mec, Command c) {
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	if (WorkingSong_EditNote(&mec->ws, c.u.int3.a1, c.u.int3.a2, c.u.int3.a3) == -1) return ERR_BadArgument;
 	return OK;
 }
 
 CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c) {
-	// TODO:
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	if (WorkingSong_List(&mec->ws) == -1) return ERR_Internal;
 	return OK;
 }
 
 CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c) {
-	return Play_Song(mec, &mec->ws->s);
+	return Play_Song(mec, mec->ws.s);
 }
 
 CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c) {
-	if (!mec->composing) return ERR_Invalid_State;
-	memset(mec->ws->s.frames, 0, mec->ws->s.framesSize);
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	// TODO: Should it stop composing or just clear the frames
 	return OK;
 }
 
 CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c) {
-	mec->songList->songs[mec->songList->songCount++] = &mec->ws->s;
-	mec->ws = NULL;
-	mec->composing = false;
-	return OK;
-}
-
-CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c) {
-	// TODO:
+	switch (mec->ws.kind) {
+		case WorkingSong_None: return ERR_Invalid_State;
+		case WorkingSong_New: case WorkingSong_Copy:
+			mec->songList->songs[mec->songList->songCount++] = mec->ws.s;
+			mec->ws.s = NULL;
+			break;
+		case WorkingSong_Edit: break;
+	}
+	mec->ws.kind = WorkingSong_None;
+	mec->ws.idx = 0;
+	mec->ws.s = NULL;
 	return OK;
 }
 
