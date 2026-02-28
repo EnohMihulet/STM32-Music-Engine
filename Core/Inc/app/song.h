@@ -46,16 +46,18 @@ static Song SONG_3 = {
 	.frames = {{392, 10000}}
 };
 
-uint16_t WorkingSong_Init(WorkingSong* ws);
+void WorkingSong_Init(WorkingSong** ws);
 
-uint16_t WorkingSong_SetTitle(WorkingSong* ws, char* title);
+int16_t WorkingSong_SetTitle(WorkingSong* ws, char* title);
 
-uint16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
+int16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
 
-uint16_t WorkingSong_List(WorkingSong* ws);
+int16_t WorkingSong_List(WorkingSong* ws);
 
 void SongList_Init(SongList* sl);
 
-uint16_t SongList_Add(SongList* sl, WorkingSong* ws);
+int16_t SongList_Add(SongList* sl, WorkingSong* ws);
 
-uint16_t SongList_Grow(SongList* sl);
+int16_t SongList_Grow(SongList* sl);
+
+int16_t SongList_Find(SongList* sl, const char* title, uint16_t* idx);

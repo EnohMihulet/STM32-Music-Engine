@@ -108,6 +108,7 @@ CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
 
 	for (uint16_t i = 0; i <= ucc->commandIndex; i++) {
 		char c = ucc->command[i];
+		if (i - segmentStart  >= COMMAND_STRING_CAPACITY) return ERR_Capacity;
 		if (c == ' ' || c == '\0') {
 			ucc->command[i] = '\0';
 			strcpy(buffer[segmentCount], ucc->command + segmentStart);
@@ -125,6 +126,12 @@ CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
 		if (CommandCode_From_String(buffer[0], &out->cc) != 0) return ERR_UnknownCommand;
 		if (COMMAND_ARG_COUNTS[out->cc] != 1) return ERR_ArgumentCount;
 
+		if (out->cc == Command_Play || out->cc == Command_Queue || out->cc == Command_NewSong) {
+			out->kind = Command_Str;
+			strcpy(out->u.str, buffer[1]);
+			return OK;
+		}
+
 		char* endptr;
 		int64_t num = strtol((char*)buffer[1], &endptr, 10);
 		if (*endptr == '\0') {
@@ -133,11 +140,7 @@ CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
 			if (out->cc == Command_Volume && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
 			if (out->cc == Command_Tempo && (out->u.args1.a1 < VOLUME_MIN || out->u.args1.a1 > VOLUME_MAX)) return ERR_OutOfRange;
 		}
-		else {
-			if (out->cc != Command_Play && out->cc != Command_Queue && out->cc != Command_NewSong) return ERR_BadArgument;
-			out->kind = Command_Str;
-			strcpy(out->u.str, buffer[1]);
-		}
+		else return ERR_BadArgument;
 	}
 	else if (segmentCount == 3 || segmentCount == 4) {
 		if (strcmp(buffer[0], "ADD") != 0) return ERR_UnknownCommand;
@@ -190,7 +193,7 @@ void Print_CommandReturnCode(CommandReturnCode crc) {
 	echo("\r\n", 2);
 }
 
-int16_t echo(char* s, uint16_t len) {
+int16_t echo(const char* s, uint16_t len) {
 	if (len == 0) return -1;
 
 	HAL_UART_Transmit(&huart2, (uint8_t*)s, len, 100);

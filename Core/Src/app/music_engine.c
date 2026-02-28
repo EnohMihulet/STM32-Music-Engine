@@ -39,10 +39,10 @@ void MusicEngine_Update(MusicEngineController* mec) {
 			if (nextFrameIdx >= mec->currSong->framesSize) {
 				Stop_Song(mec);
 
-				uint16_t songIdx;
-				if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) return;
+				Song *song;
+				if (SongQueue_Pop(&(mec->songQueue), &song)== -1) return;
 			
-				Play_Song(mec, mec->songList->songs[songIdx]);
+				Play_Song(mec, song);
 				return;
 			}
 
@@ -58,10 +58,10 @@ void MusicEngine_Update(MusicEngineController* mec) {
 			Buzzer_Start(mec->buzzer, mec->currSong->frames[mec->frameIdx].frequencyHz);
 		}
 		else if (mec->pbState == Stopped && !SongQueue_IsEmpty(&mec->songQueue)) {
-			uint16_t songIdx;
-			if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) return;
+			Song* song;
+			if (SongQueue_Pop(&(mec->songQueue), &song) == -1) return;
 		
-			Play_Song(mec, mec->songList->songs[songIdx]);
+			Play_Song(mec, song);
 			return;
 		}
 	}
@@ -82,8 +82,8 @@ void Handle_Command(MusicEngineController* mec) {
 		case Command_Stop:	crc = Stop_Song(mec); break;
 		case Command_Skip:	crc = Skip_Song(mec); break;
 		case Command_Clear:	SongQueue_Clear(&mec->songQueue); break;
-		case Command_Play:	crc = Play_Song(mec, mec->songList->songs[c.u.args1.a1]); break;
-		case Command_Queue:	crc = Queue_Song(mec, mec->songList->songs[c.u.args1.a1], c.u.args1.a1); break;
+		case Command_Play:	crc = Handle_Command_Play(mec, c); break;
+		case Command_Queue:	crc = Handle_Command_Queue(mec, c); break;
 		case Command_Songs:	Display_Songs(mec); break;
 		case Command_Tempo:	crc = Set_Tempo(mec, c.u.args1.a1); break;
 		case Command_Volume:	Buzzer_SetVolume(mec->buzzer, c.u.args1.a1); break;
@@ -107,13 +107,23 @@ void Handle_Err_Code(CommandReturnCode crc) {
 	Print_CommandReturnCode(crc);
 }
 
+CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c) {
+	uint16_t idx;
+	if (SongList_Find(mec->songList, c.u.str, &idx) == -1) return ERR_BadArgument;
+	return Play_Song(mec, mec->songList->songs[idx]);
+}
+
+CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c) {
+	uint16_t idx;
+	if (SongList_Find(mec->songList, c.u.str, &idx) == -1) return ERR_BadArgument;
+	return Queue_Song(mec, mec->songList->songs[idx]);
+}
+
 CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c) {
 	if (mec->composing) return ERR_Invalid_State;
 	mec->composing = true;
-	mec->ws = malloc(sizeof(WorkingSong));
-	assert(mec->ws);
-	WorkingSong_Init(mec->ws);
-	WorkingSong_SetTitle(mec->ws, c.u.str);
+	WorkingSong_Init(&mec->ws);
+	if (WorkingSong_SetTitle(mec->ws, c.u.str) == -1) return ERR_BadArgument;
 	return OK;
 }
 
@@ -159,9 +169,6 @@ CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c) {
 CommandReturnCode Play_Song(MusicEngineController* mec, Song* song) {
 	if (song == NULL) return ERR_BadArgument;
 
-	char s[15];
-	sprintf(s, "%d\n", song->framesSize);
-	echo(s, 2);
 	mec->pbState = Playing;
 
 	mec->currSong = song;
@@ -194,12 +201,11 @@ CommandReturnCode Stop_Song(MusicEngineController* mec) {
 	return OK;
 }
 
-CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song, uint16_t idx) {
+CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song) {
 	if (song == NULL) return ERR_BadArgument;
 
 	if (mec->pbState == Stopped) return Play_Song(mec, song);
-	// TODO: don't like song queue currently. Maybe should be queue of Song*?
-	else if (SongQueue_Push(&(mec->songQueue), idx) == -1) return ERR_Capacity;
+	else if (SongQueue_Push(&(mec->songQueue), song) == -1) return ERR_Capacity;
 
 	return OK;
 }
@@ -225,14 +231,14 @@ CommandReturnCode Skip_Song(MusicEngineController* mec) {
 
 	Stop_Song(mec);
 
-	uint16_t songIdx;
-	if (SongQueue_Pop(&(mec->songQueue), &songIdx) == -1) {
+	Song* song;
+	if (SongQueue_Pop(&(mec->songQueue), &song) == -1) {
 		mec->pbState = Stopped;
 		return OK;
 	}
 
 	mec->pbState = Playing;
-	return Play_Song(mec, mec->songList->songs[songIdx]);
+	return Play_Song(mec, song);
 }
 
 void Display_Status(MusicEngineController* mec) {
@@ -253,9 +259,9 @@ void Display_Status(MusicEngineController* mec) {
 			uint16_t songCount = qSize > 3 ? 3 : qSize;
 			len += sprintf((char*)buf + len, "In Queue: ");
 			for (uint16_t i = 0; i < songCount; i++) {
-				uint16_t songIdx = 0;
-				SongQueue_At(&mec->songQueue, i, &songIdx);
-				len += sprintf((char*)buf + len, "%s ", mec->songList->songs[songIdx]->title);
+				Song* song = 0;
+				SongQueue_At(&mec->songQueue, i, &song);
+				len += sprintf((char*)buf + len, "%s ", song->title);
 			}
 			if (qSize > 3) len += sprintf((char*)buf + len, "...\r\n");
 			else

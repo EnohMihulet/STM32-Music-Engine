@@ -130,6 +130,6 @@ CommandReturnCode CommandArg_Is_Valid(Command* c);
 
 void Print_CommandReturnCode(CommandReturnCode crc);
 
-int16_t echo(char* s, uint16_t len);
+int16_t echo(const char* s, uint16_t len);
 
 #endif

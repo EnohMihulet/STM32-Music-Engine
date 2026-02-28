@@ -33,7 +33,7 @@
 		\
 	static inline int16_t NAME##_Push(NAME* q, TYPE value) { \
 		if (NAME##_IsFull(q)) return -1; \
-		q->buffer[q->tail] = value; \
+		q->buffer[q->tail] = (value); \
 		q->tail = (q->tail + 1) % CAPACITY; \
 		q->size += 1; \
 		return 0; \
@@ -62,4 +62,4 @@
 		if (idx >= q->size) return -1; \
 		if (out) *out = q->buffer[q->head + idx % CAPACITY]; \
 		return 0; \
-	} \
+	}

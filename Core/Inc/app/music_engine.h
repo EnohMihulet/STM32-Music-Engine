@@ -12,8 +12,7 @@
 
 #define SONG_QUEUE_CAPACITY 16
 
-
-QUEUE_DECLARE(SongQueue, uint16_t, SONG_QUEUE_CAPACITY)
+QUEUE_DECLARE(SongQueue, Song*, SONG_QUEUE_CAPACITY)
 
 typedef enum PlaybackState {Stopped, Playing, Paused} PlaybackState;
 
@@ -43,6 +42,8 @@ void MusicEngine_Update(MusicEngineController* mec);
 
 void Handle_Command(MusicEngineController* mec);
 
+CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c);
@@ -55,7 +56,7 @@ CommandReturnCode Handle_Command_Load(MusicEngineController* mec, Command c);
 void Handle_Err_Code(CommandReturnCode crc);
 
 CommandReturnCode Play_Song(MusicEngineController* mec, Song* song);
-CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song, uint16_t idx);
+CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song);
 CommandReturnCode Stop_Song(MusicEngineController* mec);
 
 CommandReturnCode Pause_Song(MusicEngineController* mec);

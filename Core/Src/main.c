@@ -58,9 +58,6 @@ BuzzerController gBuzzer;
 MusicEngineController gMusicEngineController;
 SongList gSongList;
 
-static const char pressed_msg[] = "Pressed\r\n";
-static const char double_click_msg[] = "Double click\r\n";
-static const char hold_msg[] = "Hold\r\n";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -137,7 +134,7 @@ int main(void)
 		Button_Update(&gButton, &gMusicEngineController);
 		MusicEngine_Update(&gMusicEngineController);
 
-		Buzzer_Update(&(gMusicEngineController.buzzer));
+		Buzzer_Update(&gBuzzer);
 	}
   /* USER CODE END 3 */
 }
