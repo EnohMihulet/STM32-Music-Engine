@@ -126,13 +126,13 @@ CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out) {
 		// ARGS 0
 		case Command_Pause: case Command_Resume: case Command_Stop: case Command_Skip: case Command_Clear: 
 		case Command_Commands: case Command_Songs: case Command_Status: 
-		case Command_ListSong: case Command_PlaySong: case Command_ClearSong: case Command_Save:
+		case Command_ListSong: case Command_PlaySong: case Command_ClearSong: case Command_Save: case Command_Quit:
 			if (segmentCount != 1) return ERR_ArgumentCount;
 			out->kind = Command_Args0;
 			return OK;
 		// ARGS 1 STRING
 		case Command_Play: case Command_Queue: 
-		case Command_NewSong: case Command_EditSong: case Command_EditTitle:
+		case Command_NewSong: case Command_EditSong: case Command_EditTitle: case Command_Delete:
 			if (segmentCount != 2) return ERR_ArgumentCount;
 			out->kind = Command_Str1;
 			strcpy(out->u.str1.s, buffer[1]);

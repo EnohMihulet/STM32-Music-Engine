@@ -1,6 +1,7 @@
 Debug/
 Release/
 build/
+venv/
 # Object and binary files
 *.o
 *.d

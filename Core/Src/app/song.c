@@ -7,9 +7,10 @@
 #include "../../Inc/app/uart_cli.h"
 #include "../../Inc/app/song.h"
 
+
 void WorkingSong_Init(WorkingSong* ws) {
 	ws->kind = WorkingSong_None;
-	ws->idx = 0;
+	ws->idx = -1;
 }
 
 int16_t WorkingSong_NewSong(WorkingSong* ws, char* title) {
@@ -17,13 +18,16 @@ int16_t WorkingSong_NewSong(WorkingSong* ws, char* title) {
 	ws->kind = WorkingSong_New;
 	ws->s = malloc(sizeof(Song));
 	ws->s->framesSize = 0;
+	ws->s->heapAllocated = true;
 	return WorkingSong_SetTitle(ws, title);
 }
 
 int16_t WorkingSong_EditSong(WorkingSong* ws, Song* s) {
 	if (ws->s != NULL || s == NULL) return -1;
 	ws->kind = WorkingSong_Edit;
-	ws->s = s;
+	ws->s = malloc(sizeof(Song));
+	ws->s->heapAllocated = true;
+	memcpy(ws->s, s, sizeof(Song));
 	return 0;
 }
 
@@ -31,6 +35,7 @@ int16_t WorkingSong_CopySong(WorkingSong* ws, Song* s, char* title) {
 	if (ws->s != NULL || s == NULL) return -1;
 	ws->kind = WorkingSong_Copy;
 	ws->s = malloc(sizeof(Song));
+	ws->s->heapAllocated = true;
 	memcpy(ws->s, s, sizeof(Song));
 	return WorkingSong_SetTitle(ws, title);
 }
@@ -84,6 +89,28 @@ int16_t SongList_Add(SongList* sl, WorkingSong* ws) {
 	return 0;
 }
 
+int16_t SongList_Delete(SongList* sl, const char* title) {
+	uint16_t idx;
+	if (SongList_Find(sl, title, &idx) == -1) return -1;
+
+	if (sl->songs[idx]->heapAllocated) free(sl->songs[idx]);
+	sl->songs[idx] = NULL;
+
+	if (idx == sl->songCount - 1) {
+		sl->songCount -= 1;
+		return 0;
+	}
+	for (uint16_t i = idx; i < sl->songCount - 1; i++) {
+		sl->songs[i] = sl->songs[i+1];
+	}
+	sl->songCount -= 1;
+	return 0;
+}
+
+int16_t SongList_Replace(SongList* sl, WorkingSong* ws) {
+	return 0;
+}
+
 int16_t SongList_Grow(SongList* sl) {
 
 	Song** temp = (Song**)malloc(sizeof(SongList*) * (sl->songCapacity * 2));
@@ -93,6 +120,13 @@ int16_t SongList_Grow(SongList* sl) {
 	sl->songs = temp;
 	sl->songCapacity *= 2;
 	return 0;
+}
+
+bool SongList_Contains(SongList* sl, const char* title) {
+	for (uint16_t i = 0; i < sl->songCount; i++) {
+		if (strcmp(sl->songs[i]->title, title) == 0) return true;
+	}
+	return false;
 }
 
 int16_t SongList_Find(SongList* sl, const char* title, uint16_t* idx) {

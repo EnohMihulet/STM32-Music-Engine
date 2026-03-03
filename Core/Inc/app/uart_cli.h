@@ -42,12 +42,14 @@
 	X(Command_CopySong,	2, "COPYSONG", 	"COPYSONG <SONG_TITLE> <NEW_SONG_TITLE>") \
 	X(Command_AddNote,	2, "ADDNOTE", 	"ADDNOTE <" FREQHZ_RANGE_STR "> <" DURMS_RANGE_STR ">") \
 	X(Command_AddRest,	1, "ADDREST", 	"ADDREST <" DURMS_RANGE_STR ">") \
-	X(Command_EditNote,	3, "EDITNOTE", "EDITNOTE <FRAME_NUMBER> <" FREQHZ_RANGE_STR "> <" DURMS_RANGE_STR ">") \
-	X(Command_EditTitle,	1, "EDITTITLE","EDITTITLE <NEW_TITLE>") \
+	X(Command_EditNote,	3, "EDITNOTE", 	"EDITNOTE <FRAME_NUMBER> <" FREQHZ_RANGE_STR "> <" DURMS_RANGE_STR ">") \
+	X(Command_EditTitle,	1, "EDITTITLE",	"EDITTITLE <NEW_TITLE>") \
 	X(Command_ListSong,	0, "LISTSONG", 	"LISTSONG") \
 	X(Command_PlaySong,	0, "PLAYSONG", 	"PLAYSONG") \
 	X(Command_ClearSong,	0, "CLEARSONG", "CLEARSONG") \
 	X(Command_Save,		0, "SAVE", 	"SAVE") \
+	X(Command_Delete,	1, "DELETE", 	"DELETE <SONG_TITLE>") \
+	X(Command_Quit,		0, "QUIT",	"QUIT <SONG_TITLE>") \
 
 #define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND,
 typedef enum CommandCode {

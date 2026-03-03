@@ -55,6 +55,8 @@ CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c)
 CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c);
 CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_Delete(MusicEngineController* mec, Command c);
+CommandReturnCode Handle_Command_Quit(MusicEngineController* mec, Command c);
 
 void Handle_Err_Code(CommandReturnCode crc);
 

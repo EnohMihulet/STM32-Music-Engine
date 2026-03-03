@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 #define TITLE_CAPACITY 16
@@ -11,10 +12,10 @@ typedef struct Frame {
 	uint16_t durationMs;
 } Frame;
 
-
 typedef struct Song {
 	char title[TITLE_CAPACITY];
 	uint16_t framesSize;
+	bool heapAllocated;
 	Frame frames[FRAMES_CAPACITY];
 } Song;
 
@@ -30,24 +31,28 @@ typedef struct WorkingSong {
 
 typedef struct SongList {
 	uint16_t songCount;
-	uint16_t songCapacity; Song** songs;
+	uint16_t songCapacity;
+	Song** songs;
 } SongList;
 
 static Song SONG_1 = {
 	.title = "SONG1",
 	.framesSize = 3,
+	.heapAllocated = false,
 	.frames = {{988, 1000}, {0, 1000}, {988, 1000}}
 };
 
 static Song SONG_2 = {
 	.title = "SONG2",
 	.framesSize = 1,
+	.heapAllocated = false,
 	.frames = {{659, 1000}}
 };
 
 static Song SONG_3 = {
 	.title = "SONG3",
 	.framesSize = 1,
+	.heapAllocated = false,
 	.frames = {{392, 10000}}
 };
 
@@ -66,7 +71,7 @@ int16_t WorkingSong_List(WorkingSong* ws);
 void SongList_Init(SongList* sl);
 
 int16_t SongList_Add(SongList* sl, WorkingSong* ws);
-
-int16_t SongList_Grow(SongList* sl);
-
+int16_t SongList_Delete(SongList* sl, const char* title);
+bool SongList_Contains(SongList* sl, const char* title);
 int16_t SongList_Find(SongList* sl, const char* title, uint16_t* idx);
+int16_t SongList_Grow(SongList* sl);

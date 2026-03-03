@@ -98,7 +98,10 @@ void Handle_Command(MusicEngineController* mec) {
 		case Command_ListSong:	crc = Handle_Command_ListSong(mec, c); break;
 		case Command_PlaySong:	crc = Handle_Command_PlaySong(mec, c); break;
 		case Command_ClearSong:	crc = Handle_Command_ClearSong(mec, c); break;
+
 		case Command_Save:	crc = Handle_Command_Save(mec, c); break;
+		case Command_Delete:	crc = Handle_Command_Delete(mec, c); break;
+		case Command_Quit:	crc = Handle_Command_Quit(mec, c); break;
 		default: break;
 	}
 
@@ -124,7 +127,8 @@ CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c) {
 
 CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c) {
 	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
-	if (WorkingSong_NewSong(&mec->ws, c.u.str1.s) == -1) return ERR_BadArgument; // TODO: ERr handling
+	if (SongList_Contains(mec->songList, c.u.str1.s)) return ERR_BadArgument;
+	if (WorkingSong_NewSong(&mec->ws, c.u.str1.s) == -1) return ERR_Invalid_State;
 	return OK;
 }
 
@@ -133,17 +137,18 @@ CommandReturnCode Handle_Command_EditSong(MusicEngineController* mec, Command c)
 	uint16_t idx;
 	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
 	Song* s = mec->songList->songs[idx];
-	if (WorkingSong_EditSong(&mec->ws, s) == -1) return ERR_BadArgument; // TODO: ERr handling
+	if (WorkingSong_EditSong(&mec->ws, s) == -1) return ERR_Invalid_State;
 	mec->ws.idx = idx;
 	return OK;
 }
 
 CommandReturnCode Handle_Command_CopySong(MusicEngineController* mec, Command c) {
 	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
+	if (SongList_Contains(mec->songList, c.u.str2.s2)) return ERR_BadArgument;
 	uint16_t idx;
 	if (SongList_Find(mec->songList, c.u.str2.s1, &idx) == -1) return ERR_BadArgument;
 	Song* s = mec->songList->songs[idx];
-	if (WorkingSong_CopySong(&mec->ws, s, c.u.str2.s2) == -1) return ERR_BadArgument; // TODO: ERr handling
+	if (WorkingSong_CopySong(&mec->ws, s, c.u.str2.s2) == -1) return ERR_Invalid_State;
 	return OK;
 }
 
@@ -177,22 +182,40 @@ CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c)
 
 CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c) {
 	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
-	// TODO: Should it stop composing or just clear the frames
+	memset(mec->ws.s->frames, 0, mec->ws.s->framesSize);
 	return OK;
 }
 
 CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c) {
-	switch (mec->ws.kind) {
-		case WorkingSong_None: return ERR_Invalid_State;
-		case WorkingSong_New: case WorkingSong_Copy:
-			mec->songList->songs[mec->songList->songCount++] = mec->ws.s;
-			mec->ws.s = NULL;
-			break;
-		case WorkingSong_Edit: break;
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	size_t songIdx;
+	if (mec->ws.kind == WorkingSong_Edit) {
+		songIdx = mec->ws.idx;
+		if (mec->songList->songs[songIdx]->heapAllocated) free(mec->songList->songs[songIdx]);
 	}
-	mec->ws.kind = WorkingSong_None;
-	mec->ws.idx = 0;
+	else songIdx = mec->songList->songCount++;
+
+	mec->songList->songs[songIdx] = mec->ws.s;
 	mec->ws.s = NULL;
+	mec->ws.idx = songIdx;
+	if (WorkingSong_EditSong(&mec->ws, mec->songList->songs[songIdx])) return ERR_Invalid_State;
+	return OK;
+}
+
+CommandReturnCode Handle_Command_Delete(MusicEngineController* mec, Command c) {
+	uint16_t idx;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
+	if (mec->ws.idx == idx) return ERR_BadArgument;
+	if (SongList_Delete(mec->songList, c.u.str1.s) == -1) return ERR_BadArgument;
+	return OK;
+}
+
+CommandReturnCode Handle_Command_Quit(MusicEngineController* mec, Command c) {
+	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+	free(mec->ws.s);
+	mec->ws.s = NULL;
+	mec->ws.kind = WorkingSong_None;
+	mec->ws.idx = -1;
 	return OK;
 }
 
