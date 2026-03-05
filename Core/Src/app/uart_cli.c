@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +14,34 @@ void UartCLIController_Init(UartCLIController* ucc) {
 	__disable_irq();
 	ucc->lastPos = 0;
 	ucc->currPos = 0;
+	ucc->nextCommandId = 0;
 	ucc->commandIndex = 0;
 	memset(ucc->command, 0, sizeof(ucc->command));
 	__set_PRIMASK(primask);
+}
+
+int CLIResponse_Emit(CLIResponseQueue* q, uint16_t id, ResponseKind kind, ErrCode code, const char* msg) {
+	CLIResponse resp = { .id = id, .kind = kind, .code = code };
+	if (msg != NULL) {
+		strncpy(resp.msg, msg, CLI_RESPONSE_MSG_CAPACITY - 1);
+		resp.msg[CLI_RESPONSE_MSG_CAPACITY - 1] = '\0';
+	}
+	else resp.msg[0] = '\0';
+
+	return CLIResponseQueue_Push(q, resp);
+}
+
+int CLIResponse_Emitf(CLIResponseQueue* q, uint16_t id, ResponseKind kind, ErrCode code, const char* fmt, ...) {
+	CLIResponse resp = { .id = id, .kind = kind, .code = code };
+	if (fmt != NULL) {
+		va_list args;
+		va_start(args, fmt);
+		vsnprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, fmt, args);
+		va_end(args);
+	}
+	else resp.msg[0] = '\0';
+
+	return CLIResponseQueue_Push(q, resp);
 }
 
 void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
@@ -24,7 +50,7 @@ void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 	if (Read_From_RXBuffer(ucc) == -1) return;
 
 	Command c;
-	c.id = command_id++;
+	c.id = ucc->nextCommandId++;
 
 	if (Parse_CommandString(ucc, &c) == 0) {
 		if (c.cc == Command_Commands) Print_Commands();
@@ -117,22 +143,16 @@ void Append_To_CommandBuffer(UartCLIController* ucc, char c) {
 
 int Parse_CommandString(UartCLIController* ucc, Command* out) {
 	CommandStrSegments css;
-	if (Break_Up_CommandString(ucc, &css) == -1) return -1;
+	if (Break_Up_CommandString(ucc, &css, out->id) == -1) return -1;
 
-	CLIResponse resp;
 	if (CommandCode_From_String(css.s1, &out->cc) == -1) {
-		resp.id = command_id;
-		resp.kind = RESP_ERR;
-		resp.code = ERR_UnknownCommand;
+		CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_UnknownCommand, NULL);
+		CLIResponse_Emitf(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Unknown command: %s", css.s1);
 		return -1;
 	}
 
-	if (out->cc == Command_None) {
-		resp.id = command_id;
-		resp.kind = RESP_ERR;
-		resp.code = ERR_UnknownCommand;
+	if (out->cc == Command_None)
 		return -1;
-	}
 
 	switch (css.count) {
 		case 1: return Parse_ZeroArgCommand(ucc, &css, out);
@@ -154,17 +174,16 @@ int Parse_ZeroArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comman
 			return 0;
 
 		default: {
-			CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-				.id = command_id,
-				.kind = RESP_ERR,
-				.code = ERR_ArgumentCount,
-			});
-			CLIResponse resp;
-			resp.id = command_id;
-			resp.kind = RESP_INFO;
-			resp.code = ERR_None;
-			snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Command %s expects %d args", COMMAND_STRINGS[out->cc], COMMAND_ARG_COUNTS[out->cc]);
-			CLIResponseQueue_Push(&ucc->responseQueue, resp);
+			CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_ArgumentCount, NULL);
+			CLIResponse_Emitf(
+				&ucc->responseQueue,
+				out->id,
+				RESP_INFO,
+				ERR_None,
+				"Command %s expects %d args",
+				COMMAND_STRINGS[out->cc],
+				COMMAND_ARG_COUNTS[out->cc]
+			);
 			return -1;
 		}
 	}
@@ -183,62 +202,34 @@ int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 		// ARGS 1 NUMBER
 		case Command_Volume: case Command_AddRest: {
 			int64_t num;
-			int err = CommandArg_From_String(css->s2, &num);
-			if (num < 0) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Argument must be positive"
-				});
-				return -1;
-			}
-			else if (num > INT32_MAX) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Argument is greater than int32_t max"
-				});
+			if (CommandArg_From_String(css->s2, &num)) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Did you mistype the number?");
 				return -1;
 			}
 
-			if (err == -1) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Did you mistype the number?"
-				});
+			if (num < 0) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Argument must be positive");
 				return -1;
 			}
+			else if (num > INT32_MAX) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Argument is greater than int32_t max");
+				return -1;
+			}
+
 			if (out->cc == Command_Volume && (num < VOLUME_MIN || num > VOLUME_MAX)) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_OutOfRange,
-				});
-				CLIResponse resp;
-				resp.id = command_id;
-				resp.kind = RESP_INFO;
-				resp.code = ERR_None;
-				snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Frequency valid range: %d-%d", VOLUME_MIN, VOLUME_MAX);
-				CLIResponseQueue_Push(&ucc->responseQueue, resp);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Frequency valid range: %d-%d",
+					VOLUME_MIN,
+					VOLUME_MAX
+				);
 				return -1;
 			}
 			out->kind = Command_Int1;
@@ -246,17 +237,16 @@ int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 			return 0;
 		}
 		default: {
-			CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-				.id = command_id,
-				.kind = RESP_ERR,
-				.code = ERR_ArgumentCount,
-			});
-			CLIResponse resp;
-			resp.id = command_id;
-			resp.kind = RESP_INFO;
-			resp.code = ERR_None;
-			snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Command %s expects %d args", COMMAND_STRINGS[out->cc], COMMAND_ARG_COUNTS[out->cc]);
-			CLIResponseQueue_Push(&ucc->responseQueue, resp);
+			CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_ArgumentCount, NULL);
+			CLIResponse_Emitf(
+				&ucc->responseQueue,
+				out->id,
+				RESP_INFO,
+				ERR_None,
+				"Command %s expects %d args",
+				COMMAND_STRINGS[out->cc],
+				COMMAND_ARG_COUNTS[out->cc]
+			);
 			return -1;
 		}
 	}
@@ -265,83 +255,62 @@ int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 
 int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out) {
 	switch (out->cc) {
-		case Command_CopySong: case Command_AddNote:
+		case Command_CopySong:
+			out->kind = Command_Str2;
+			strcpy(out->u.str2.s1, css->s2);
+			strcpy(out->u.str2.s2, css->s3);
+			return 0;
+		case Command_AddNote:
 			out->kind = Command_Int2;
 			int64_t num1;
 			int64_t num2;
 			int err1 = CommandArg_From_String(css->s2, &num1);
 			int err2 = CommandArg_From_String(css->s3, &num2);
+			if (err1 == -1 || err2 == -1) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Did you mistype the number?");
+				return -1;			
+			}
+
 			if (num1 < 0 || num2 < 0) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Arguments must be positive"
-				});
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments must be positive");
 				return -1;
 			}
 			else if (num1 > INT32_MAX || num2 > INT32_MAX) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Arguments is greater than int32_t max"
-				});
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments is greater than int32_t max");
 				return -1;
 			}
-			if (err1 == -1 || err2 == -1) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Did you mistype the number?"
-				});
-				return -1;			
-			}
+
 			if (num1 < FREQUENCY_MIN_HZ || num1 > FREQUENCY_MAX_HZ) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_OutOfRange,
-				});
-				CLIResponse resp;
-				resp.id = command_id;
-				resp.kind = RESP_INFO;
-				resp.code = ERR_None;
-				snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Frequency valid range: %d-%d", FREQUENCY_MIN_HZ, FREQUENCY_MAX_HZ);
-				CLIResponseQueue_Push(&ucc->responseQueue, resp);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Frequency valid range: %d-%d",
+					FREQUENCY_MIN_HZ,
+					FREQUENCY_MAX_HZ
+				);
+				return -1;
 			}
 			out->kind = Command_Int2;
 			out->u.int2.a1 = num1;
 			out->u.int2.a2 = num2;
 			return 0;
 		default: {
-			CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-				.id = command_id,
-				.kind = RESP_ERR,
-				.code = ERR_ArgumentCount,
-			});
-			CLIResponse resp;
-			resp.id = command_id;
-			resp.kind = RESP_INFO;
-			resp.code = ERR_None;
-			snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Command %s expects %d args", COMMAND_STRINGS[out->cc], COMMAND_ARG_COUNTS[out->cc]);
-			CLIResponseQueue_Push(&ucc->responseQueue, resp);
+			CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_ArgumentCount, NULL);
+			CLIResponse_Emitf(
+				&ucc->responseQueue,
+				out->id,
+				RESP_INFO,
+				ERR_None,
+				"Command %s expects %d args",
+				COMMAND_STRINGS[out->cc],
+				COMMAND_ARG_COUNTS[out->cc]
+			);
 			return -1;
 		}
 	}
@@ -358,60 +327,35 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 			int err1 = CommandArg_From_String(css->s2, &num1);
 			int err2 = CommandArg_From_String(css->s3, &num2);
 			int err3 = CommandArg_From_String(css->s4, &num3);
+			if (err1 == -1 || err2 == -1 || err3 == -1) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Did you mistype the number?");
+				return -1;
+			}
+
 			if (num1 < 0 || num2 < 0 || num3 < 0) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Arguments must be positive"
-				});
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments must be positive");
 				return -1;
 			}
 			else if (num1 > INT32_MAX || num2 > INT32_MAX || num3 > INT32_MAX) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Arguments is greater than int32_t max"
-				});
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments is greater than int32_t max");
 				return -1;
 			}
-			if (err1 == -1 || err2 == -1 || err3 == -1) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_BadNumber,
-				});
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_INFO,
-					.code=ERR_None,
-					.msg="Did you mistype the number?"
-				});
-				return -1;
-			}
+
 			if (num2 < FREQUENCY_MIN_HZ || num2 > FREQUENCY_MAX_HZ) {
-				CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse) {
-					.id=command_id,
-					.kind=RESP_ERR,
-					.code=ERR_OutOfRange,
-				});
-				CLIResponse resp;
-				resp.id = command_id;
-				resp.kind = RESP_INFO;
-				resp.code = ERR_None;
-				snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Frequency valid range: %d-%d", FREQUENCY_MIN_HZ, FREQUENCY_MAX_HZ);
-				CLIResponseQueue_Push(&ucc->responseQueue, resp);
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Frequency valid range: %d-%d",
+					FREQUENCY_MIN_HZ,
+					FREQUENCY_MAX_HZ
+				);
+				return -1;
 			}
 			out->kind = Command_Int3;
 			out->u.int3.a1 = num1;
@@ -419,17 +363,16 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 			out->u.int3.a3 = num3;
 			return 0;
 		default: {
-			CLIResponseQueue_Push(&ucc->responseQueue, (CLIResponse){
-				.id = command_id,
-				.kind = RESP_ERR,
-				.code = ERR_ArgumentCount,
-			});
-			CLIResponse resp;
-			resp.id = command_id;
-			resp.kind = RESP_INFO;
-			resp.code = ERR_None;
-			snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Command %s expects %d args", COMMAND_STRINGS[out->cc], COMMAND_ARG_COUNTS[out->cc]);
-			CLIResponseQueue_Push(&ucc->responseQueue, resp);
+			CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_ArgumentCount, NULL);
+			CLIResponse_Emitf(
+				&ucc->responseQueue,
+				out->id,
+				RESP_INFO,
+				ERR_None,
+				"Command %s expects %d args",
+				COMMAND_STRINGS[out->cc],
+				COMMAND_ARG_COUNTS[out->cc]
+			);
 			return -1;
 		}
 	}
@@ -437,31 +380,23 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 }
 
 // TODO: Should probably rewrite this
-int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css) {
-	CLIResponse resp;
+int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css, uint16_t commandId) {
 	css->count = 0;
 	char* currStr = css->s1;
 
-	bool err = false;
 	int start = 0;
 	for (uint16_t i = 0; i <= ucc->commandIndex; i++) {
 		char c = ucc->command[i];
 
 		if (i - start >= COMMAND_STRING_CAPACITY) {
-			resp.id = command_id;
-			resp.kind = RESP_ERR;
-			resp.code = ERR_Capacity;
-			err = true;
-			break;
+			CLIResponse_Emit(&ucc->responseQueue, commandId, RESP_ERR, ERR_Capacity, NULL);
+			return -1;
 		}
 
 		if (c == ' ' || c == '\0') {
 			if (css->count >= COMMAND_SEGMENT_COUNT) {
-				resp.id = command_id;
-				resp.kind = RESP_ERR;
-				resp.code = ERR_ArgumentCount;
-				err = true;
-				break;
+				CLIResponse_Emit(&ucc->responseQueue, commandId, RESP_ERR, ERR_ArgumentCount, NULL);
+				return -1;
 			}
 			ucc->command[i] = '\0';
 			strcpy(currStr, ucc->command + start);
@@ -470,11 +405,6 @@ int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css) {
 			css->count += 1;
 			start = i + 1;
 		}
-	}
-	
-	if (err) {
-		CLIResponseQueue_Push(&ucc->responseQueue, resp);
-		return -1;
 	}
 
 	return 0;

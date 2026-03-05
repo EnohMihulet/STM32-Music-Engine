@@ -26,7 +26,7 @@
 #define DURMS_RANGE_STR RANGE_STR(DURATION_MIN_MS, DURATION_MAX_MS)
 
 #define LIST_OF_COMMANDS \
-	X(Command_None,		0, "NONE",	"")   \
+	X(Command_None,		0, "",	"")   \
 	X(Command_Commands,	0, "COMMANDS",	"COMMANDS") \
 	X(Command_Pause,	0, "PAUSE",	"PAUSE")  \
 	X(Command_Resume,	0, "RESUME", 	"RESUME") \
@@ -152,17 +152,19 @@ typedef struct CommandStrSegments {
 QUEUE_DECLARE(CommandQueue, Command, COMMAND_QUEUE_CAPACITY)
 QUEUE_DECLARE(CLIResponseQueue, CLIResponse, UART_OUTPUT_QUEUE_CAPACITY)
 
+int CLIResponse_Emit(CLIResponseQueue* q, uint16_t id, ResponseKind kind, ErrCode code, const char* msg);
+int CLIResponse_Emitf(CLIResponseQueue* q, uint16_t id, ResponseKind kind, ErrCode code, const char* fmt, ...);
+
 typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
+	uint16_t nextCommandId;
 	uint8_t* rxBuffer;
 
 	CLIResponseQueue responseQueue;
 	char command[COMMAND_CAPACITY];
 	uint16_t commandIndex;
 } UartCLIController;
-
-static uint16_t command_id = 0;
 
 void UartCLIController_Init(UartCLIController* ucc);
 void Uart_Update(UartCLIController* ucc, CommandQueue* cq);
@@ -173,7 +175,7 @@ int Read_From_RXBuffer(UartCLIController* ucc);
 void Append_To_CommandBuffer(UartCLIController* ucc, char c);
 
 int Parse_CommandString(UartCLIController* ucc, Command* out);
-int Break_Up_CommandString(UartCLIController* ucc, CommandStrSegments* css);
+int Break_Up_CommandString(UartCLIController* ucc, CommandStrSegments* css, uint16_t commandId);
 int Parse_ZeroArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
 int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
 int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
