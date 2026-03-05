@@ -132,7 +132,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		Uart_Update(&gUartCLIController, &gMusicEngineController.commandQueue);
 		Button_Update(&gButton, &gMusicEngineController);
-		MusicEngine_Update(&gMusicEngineController);
+		MusicEngine_Update(&gMusicEngineController, &gUartCLIController);
 
 		Buzzer_Update(&gBuzzer);
 	}

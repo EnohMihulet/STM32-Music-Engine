@@ -18,8 +18,6 @@ void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc
 	mec->currSong = NULL;
 	mec->frameIdx = 0;
 
-	mec->tempo = 0;
-
 	WorkingSong_Init(&mec->ws);
 	SongQueue_Init(&mec->songQueue);
 	CommandQueue_Init(&mec->commandQueue);
@@ -28,8 +26,8 @@ void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc
 	mec->songList = sl;
 }
 
-void MusicEngine_Update(MusicEngineController* mec) {
-	Handle_Command(mec);
+void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc) {
+	Handle_Command(mec, &ucc->responseQueue);
 
 	if (mec->updateFrame) {
 		if (mec->pbState == Playing) {
@@ -65,129 +63,541 @@ void MusicEngine_Update(MusicEngineController* mec) {
 	}
 }
 
-void Handle_Command(MusicEngineController* mec) {
+void Handle_Command(MusicEngineController* mec, CLIResponseQueue* rq) {
 	if (CommandQueue_IsEmpty(&(mec->commandQueue))) return;
 
 	Command c = {Command_None, -1};
 	if (CommandQueue_Pop(&(mec->commandQueue), &c) == -1) return;
 
-	CommandReturnCode crc = OK;
-
+	int err;
 	switch (c.cc) {
-		case Command_None: break;
-		case Command_Pause:	crc = Pause_Song(mec); break;
-		case Command_Resume:	crc = Resume_Song(mec); break;
-		case Command_Stop:	crc = Stop_Song(mec); break;
-		case Command_Skip:	crc = Skip_Song(mec); break;
-		case Command_Clear:	SongQueue_Clear(&mec->songQueue); break;
-		case Command_Play:	crc = Handle_Command_Play(mec, c); break;
-		case Command_Queue:	crc = Handle_Command_Queue(mec, c); break;
-		case Command_Songs:	Display_Songs(mec); break;
-		case Command_Tempo:	crc = Set_Tempo(mec, c.u.int1.a1); break;
-		case Command_Volume:	Buzzer_SetVolume(mec->buzzer, c.u.int1.a1); break;
-		case Command_Status:	Display_Status(mec); break;
-
-		case Command_NewSong:	crc = Handle_Command_NewSong(mec, c); break;
-		case Command_EditSong:	crc = Handle_Command_EditSong(mec, c); break;
-		case Command_CopySong:	crc = Handle_Command_CopySong(mec, c); break;
-
-		case Command_AddNote:	crc = Handle_Command_AddNote(mec, c); break;
-		case Command_AddRest:	crc = Handle_Command_AddRest(mec, c); break;
-		case Command_EditNote:	crc = Handle_Command_EditNote(mec, c); break;
-
-		case Command_ListSong:	crc = Handle_Command_ListSong(mec, c); break;
-		case Command_PlaySong:	crc = Handle_Command_PlaySong(mec, c); break;
-		case Command_ClearSong:	crc = Handle_Command_ClearSong(mec, c); break;
-
-		case Command_Save:	crc = Handle_Command_Save(mec, c); break;
-		case Command_Delete:	crc = Handle_Command_Delete(mec, c); break;
-		case Command_Quit:	crc = Handle_Command_Quit(mec, c); break;
-		default: break;
+		case Command_None:	break;
+		case Command_Pause:	err = Handle_Command_Pause(mec, rq, c); break;
+		case Command_Resume:	err = Handle_Command_Resume(mec, rq, c); break;
+		case Command_Stop:	err = Handle_Command_Stop(mec, rq, c); break;
+		case Command_Skip:	err = Handle_Command_Skip(mec, rq, c); break;
+		case Command_Clear:	err = Handle_Command_Clear(mec, rq, c); break;
+		case Command_Play:	err = Handle_Command_Play(mec, rq, c); break;
+		case Command_Queue:	err = Handle_Command_Queue(mec, rq, c); break;
+		case Command_Songs:	err = Handle_Command_Songs(mec, rq, c); break;
+		case Command_Volume:	err = Handle_Command_Volume(mec, rq, c); break;
+		case Command_Status:	err = Handle_Command_Status(mec, rq, c); break;
+		case Command_NewSong:	err = Handle_Command_NewSong(mec, rq, c); break;
+		case Command_EditSong:	err = Handle_Command_EditSong(mec, rq, c); break;
+		case Command_CopySong:	err = Handle_Command_CopySong(mec, rq, c); break;
+		case Command_AddNote:	err = Handle_Command_AddNote(mec, rq, c); break;
+		case Command_AddRest:	err = Handle_Command_AddRest(mec, rq, c); break;
+		case Command_EditNote:	err = Handle_Command_EditNote(mec, rq, c); break;
+		case Command_ListSong:	err = Handle_Command_ListSong(mec, rq, c); break;
+		case Command_PlaySong:	err = Handle_Command_PlaySong(mec, rq, c); break;
+		case Command_ClearSong:	err = Handle_Command_ClearSong(mec, rq, c); break;
+		case Command_Save:	err = Handle_Command_Save(mec, rq, c); break;
+		case Command_Delete:	err = Handle_Command_Delete(mec, rq, c); break;
+		case Command_Quit:	err = Handle_Command_Quit(mec, rq, c); break;
+		default: return;
 	}
 
-	Handle_Err_Code(crc);
+	if (err == 0) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_OK,
+			.code=ERR_None,
+		});
+	}
 }
 
-void Handle_Err_Code(CommandReturnCode crc) {
-	if (crc != OK)
-	Print_CommandReturnCode(crc);
+int Handle_Command_Pause(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (Pause_Song(mec) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_WARN,
+			.code=ERR_None,
+			.msg="Song already paused"
+		});
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c) {
+int Handle_Command_Resume(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (Resume_Song(mec) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_WARN,
+			.code=ERR_None,
+			.msg="Song already playing"
+		});
+	}
+	return 0;
+}
+
+int Handle_Command_Stop(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (Stop_Song(mec) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_WARN,
+			.code=ERR_None,
+			.msg="Song already stopped"
+		});
+	}
+	return 0;
+}
+
+int Handle_Command_Skip(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (Skip_Song(mec) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_WARN,
+			.code=ERR_None,
+			.msg="Nothing to skip"
+		});
+	}
+	return 0;
+}
+
+int Handle_Command_Clear(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (SongQueue_IsEmpty(&mec->songQueue)) {
+		CLIResponseQueue_Push(rq, (CLIResponse) {
+			.id=command_id,
+			.kind=RESP_WARN,
+			.code=ERR_None,
+			.msg="Song queue already empty"
+		});
+	}
+	else SongQueue_Clear(&mec->songQueue);
+	return 0;
+}
+
+int Handle_Command_Play(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
-	return Play_Song(mec, mec->songList->songs[idx]);
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp;
+		resp.id = command_id;
+		resp.kind = RESP_INFO;
+		resp.code = ERR_None;
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Song titled %s not found", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+	
+	Play_Song(mec, mec->songList->songs[idx]);
+
+	CLIResponseQueue_Push(rq, (CLIResponse){
+		.id=command_id,
+		.kind=RESP_OK,
+		.code=ERR_None
+	});
+	CLIResponse resp;
+	resp.id = command_id;
+	resp.kind = RESP_INFO;
+	resp.code = ERR_None;
+	snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Now Playing: %s", c.u.str1.s);
+	return -1;
 }
 
-CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c) {
+int Handle_Command_Queue(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
-	return Queue_Song(mec, mec->songList->songs[idx]);
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp;
+		resp.id = command_id;
+		resp.kind = RESP_INFO;
+		resp.code = ERR_None;
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Song titled %s not found", c.u.str1.s);
+		return -1;
+	}
+
+	if (Queue_Song(mec, mec->songList->songs[idx]) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Capacity
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Song queue is full"
+		});
+		return -1;
+	}
+
+	return 0;
 }
 
-CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
-	if (SongList_Contains(mec->songList, c.u.str1.s)) return ERR_BadArgument;
-	if (WorkingSong_NewSong(&mec->ws, c.u.str1.s) == -1) return ERR_Invalid_State;
-	return OK;
+int Handle_Command_Songs(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	Display_Songs(mec);
+	return 0;
 }
 
-CommandReturnCode Handle_Command_EditSong(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
+int Handle_Command_Volume(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (Buzzer_SetVolume(mec->buzzer, c.u.int1.a1) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
+}
+
+int Handle_Command_Status(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	Display_Status(mec);
+	return 0;
+}
+
+int Handle_Command_NewSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind != WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Already composing a song"
+		});
+		return -1;
+	}
+
+	if (SongList_Contains(mec->songList, c.u.str1.s)) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "%s is already a song", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+
+	if (WorkingSong_NewSong(&mec->ws, c.u.str1.s) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
+}
+
+int Handle_Command_EditSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind != WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Already composing a song"
+		});
+		return -1;
+	}
+
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "%s is not a song", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+
 	Song* s = mec->songList->songs[idx];
-	if (WorkingSong_EditSong(&mec->ws, s) == -1) return ERR_Invalid_State;
+	if (WorkingSong_EditSong(&mec->ws, s) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	
 	mec->ws.idx = idx;
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Handle_Command_CopySong(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind != WorkingSong_None) return ERR_Invalid_State;
-	if (SongList_Contains(mec->songList, c.u.str2.s2)) return ERR_BadArgument;
+int Handle_Command_CopySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind != WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Already composing a song"
+		});
+		return -1;
+	}
+
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str2.s1, &idx) == -1) return ERR_BadArgument;
+	if (SongList_Find(mec->songList, c.u.str2.s1, &idx) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "%s is not a song", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
 	Song* s = mec->songList->songs[idx];
-	if (WorkingSong_CopySong(&mec->ws, s, c.u.str2.s2) == -1) return ERR_Invalid_State;
-	return OK;
+
+	if (SongList_Contains(mec->songList, c.u.str2.s2)) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "%s is already a song", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+
+	if (WorkingSong_CopySong(&mec->ws, s, c.u.str2.s2) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
-	if (WorkingSong_AddNote(&mec->ws, c.u.int2.a1, c.u.int2.a2) == -1) return ERR_Internal;
-	return OK;
+int Handle_Command_AddNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
+	if (WorkingSong_AddNote(&mec->ws, c.u.int2.a1, c.u.int2.a2) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
-	if (WorkingSong_AddNote(&mec->ws, 0, c.u.int1.a1) == -1) return ERR_Internal;
-	return OK;
+int Handle_Command_AddRest(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
+	if (WorkingSong_AddNote(&mec->ws, 0, c.u.int1.a1) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_EditNote(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
-	if (WorkingSong_EditNote(&mec->ws, c.u.int3.a1, c.u.int3.a2, c.u.int3.a3) == -1) return ERR_BadArgument;
-	return OK;
+int Handle_Command_EditNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
+	if (WorkingSong_EditNote(&mec->ws, c.u.int3.a1, c.u.int3.a2, c.u.int3.a3) == -1) {
+		char buf[CLI_RESPONSE_MSG_CAPACITY];
+		uint16_t frameCount = mec->ws.s->framesSize;
+		if (frameCount == 0) {
+			CLIResponseQueue_Push(rq, (CLIResponse){
+				.id=command_id,
+				.kind=RESP_ERR,
+				.code=ERR_Invalid_State
+			});
+			snprintf(buf, CLI_RESPONSE_MSG_CAPACITY, "There are no frames to edit");
+		}
+		else {
+			CLIResponseQueue_Push(rq, (CLIResponse){
+				.id=command_id,
+				.kind=RESP_ERR,
+				.code=ERR_OutOfRange
+			});
+			if (frameCount == 1) snprintf(buf, CLI_RESPONSE_MSG_CAPACITY, "");
+			else snprintf(buf, CLI_RESPONSE_MSG_CAPACITY, "Frames valid range: 1-%u", frameCount);
+		}
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		strcpy(resp.msg, buf);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
-	if (WorkingSong_List(&mec->ws) == -1) return ERR_Internal;
-	return OK;
+int Handle_Command_ListSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
+	if (WorkingSong_List(&mec->ws) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c) {
-	return Play_Song(mec, mec->ws.s);
+int Handle_Command_PlaySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
+	if (Play_Song(mec, mec->ws.s) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+int Handle_Command_ClearSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
 	memset(mec->ws.s->frames, 0, mec->ws.s->framesSize);
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+int Handle_Command_Save(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+			.msg="Must be composing a song"
+		});
+		return -1;
+	}
+
 	size_t songIdx;
 	if (mec->ws.kind == WorkingSong_Edit) {
 		songIdx = mec->ws.idx;
@@ -198,29 +608,86 @@ CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c) {
 	mec->songList->songs[songIdx] = mec->ws.s;
 	mec->ws.s = NULL;
 	mec->ws.idx = songIdx;
-	if (WorkingSong_EditSong(&mec->ws, mec->songList->songs[songIdx])) return ERR_Invalid_State;
-	return OK;
+	if (WorkingSong_EditSong(&mec->ws, mec->songList->songs[songIdx])) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	} 
+	return 0;
 }
 
-CommandReturnCode Handle_Command_Delete(MusicEngineController* mec, Command c) {
+int Handle_Command_Delete(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
 	uint16_t idx;
-	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) return ERR_BadArgument;
-	if (mec->ws.idx == idx) return ERR_BadArgument;
-	if (SongList_Delete(mec->songList, c.u.str1.s) == -1) return ERR_BadArgument;
-	return OK;
+	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "%s is not a song", c.u.str1.s);
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+	if (mec->ws.idx == idx) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_BadArgument
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Cannot delete the song you are currently editing");
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+	if (SongList_Delete(mec->songList, c.u.str1.s) == -1) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Internal
+		});
+		return -1;
+	}
+	return 0;
 }
 
-CommandReturnCode Handle_Command_Quit(MusicEngineController* mec, Command c) {
-	if (mec->ws.kind == WorkingSong_None) return ERR_Invalid_State;
+int Handle_Command_Quit(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+	if (mec->ws.kind == WorkingSong_None) {
+		CLIResponseQueue_Push(rq, (CLIResponse){
+			.id=command_id,
+			.kind=RESP_ERR,
+			.code=ERR_Invalid_State
+		});
+		CLIResponse resp = {
+			.id=command_id,
+			.kind=RESP_INFO,
+			.code=ERR_None,
+		};
+		snprintf(resp.msg, CLI_RESPONSE_MSG_CAPACITY, "Must be composing a song");
+		CLIResponseQueue_Push(rq, resp);
+		return -1;
+	}
+
 	free(mec->ws.s);
 	mec->ws.s = NULL;
 	mec->ws.kind = WorkingSong_None;
 	mec->ws.idx = -1;
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Play_Song(MusicEngineController* mec, Song* song) {
-	if (song == NULL) return ERR_BadArgument;
+int Play_Song(MusicEngineController* mec, Song* song) {
+	if (song == NULL) return -1;
 
 	mec->pbState = Playing;
 
@@ -231,17 +698,17 @@ CommandReturnCode Play_Song(MusicEngineController* mec, Song* song) {
 
 	if (currFrame.durationMs == 0) {
 		mec->updateFrame = true;
-		return OK;
+		return 0;
 	}
 	else mec->updateFrame = false;
 
 	Buzzer_Start(mec->buzzer, currFrame.frequencyHz);
 
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Stop_Song(MusicEngineController* mec) {
-	if (mec->pbState == Stopped) return ERR_Invalid_State;
+int Stop_Song(MusicEngineController* mec) {
+	if (mec->pbState == Stopped) return -1;
 
 	mec->pbState = Stopped;
 	mec->remainingTimeMs = 0;
@@ -251,43 +718,43 @@ CommandReturnCode Stop_Song(MusicEngineController* mec) {
 	mec->frameIdx = 0;
 
 	Buzzer_Stop(mec->buzzer);
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song) {
-	if (song == NULL) return ERR_BadArgument;
+int Queue_Song(MusicEngineController* mec, Song* song) {
+	if (song == NULL) return -1;
 
 	if (mec->pbState == Stopped) return Play_Song(mec, song);
-	else if (SongQueue_Push(&(mec->songQueue), song) == -1) return ERR_Capacity;
+	else if (SongQueue_Push(&(mec->songQueue), song) == -1) return -1;
 
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Pause_Song(MusicEngineController* mec) {
-	if (mec->pbState == Paused) return ERR_Invalid_State;
+int Pause_Song(MusicEngineController* mec) {
+	if (mec->pbState == Paused) return -1;
 	mec->pbState = Paused;
 
 	Buzzer_Stop(mec->buzzer);
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Resume_Song(MusicEngineController* mec) {
-	if (mec->pbState != Paused) return ERR_Invalid_State;
+int Resume_Song(MusicEngineController* mec) {
+	if (mec->pbState != Paused) return -1;
 	mec->pbState = Playing;
 
 	Buzzer_Start(mec->buzzer, mec->currSong->frames[mec->frameIdx].frequencyHz);
-	return OK;
+	return 0;
 }
 
-CommandReturnCode Skip_Song(MusicEngineController* mec) {
-	if (mec->pbState == Stopped) return ERR_Invalid_State;
+int Skip_Song(MusicEngineController* mec) {
+	if (mec->pbState == Stopped) return -1;
 
 	Stop_Song(mec);
 
 	Song* song;
 	if (SongQueue_Pop(&(mec->songQueue), &song) == -1) {
 		mec->pbState = Stopped;
-		return OK;
+		return 0;
 	}
 
 	mec->pbState = Playing;
@@ -317,27 +784,25 @@ void Display_Status(MusicEngineController* mec) {
 				len += sprintf((char*)buf + len, "%s ", song->title);
 			}
 			if (qSize > 3) len += sprintf((char*)buf + len, "...\r\n");
-			else
-                          len += sprintf(len + (char *)buf, "\r\n");
+			else len += sprintf(len + (char *)buf, "\r\n");
                 }
 	}
 	else {
 		len += sprintf(buf, "Not Playing\r\n");
 	}
 
-	len += sprintf((char*)buf + len, "Volume: %u ", mec->buzzer->volumePct);
-	len += sprintf((char*)buf + len, "Tempo: %u\r\n", mec->tempo);
+	len += sprintf((char*)buf + len, "Volume: %u\r\n", mec->buzzer->volumePct);
 
-	echo(buf, len + 1);
+	echo(buf, len);
 	return;
 }
 
 void Display_Songs(MusicEngineController* mec) {
 	for (uint16_t i = 0; i < mec->songList->songCount; i++) {
 		echo((char*)mec->songList->songs[i]->title, strlen(mec->songList->songs[i]->title));
-		echo(", ", 2);
+		if (i < mec->songList->songCount - 1) echo(", ", 2);
 	}
-	echo("\r\n", 2);
+	echo_newline();
 	return;
 }
 
@@ -346,17 +811,4 @@ void Display_Volume(MusicEngineController* mec) {
 	sprintf(buf, "Volume: %u\r\n", mec->buzzer->volumePct);
 	echo(buf, strlen(buf));
 	return;
-}
-
-void Display_Tempo(MusicEngineController* mec) {
-	char buf[32];
-	sprintf(buf, "Tempo: %u\r\n", mec->buzzer->volumePct);
-	echo(buf, strlen(buf));
-	return;
-}
-
-int16_t Set_Tempo(MusicEngineController* mec, uint16_t t) {
-	if (t < 40 || t > 200) return -1;
-	mec->tempo = t;
-	return 0;
 }

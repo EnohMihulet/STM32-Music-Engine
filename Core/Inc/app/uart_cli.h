@@ -9,10 +9,12 @@
 
 #define UART_RX_BUFFER_SIZE 256
 #define COMMAND_CAPACITY 64
-#define COMMAND_QUEUE_CAPACITY 15
+#define COMMAND_QUEUE_CAPACITY 16
 #define COMMAND_STRING_CAPACITY 16
+#define UART_OUTPUT_QUEUE_CAPACITY 16
+#define CLI_RESPONSE_MSG_CAPACITY 64
 
-#define COMMAND_SEGMENT_COUNT 5
+#define COMMAND_SEGMENT_COUNT 4
 
 #define STR(x) #x
 #define XSTR(x) STR(x)
@@ -34,7 +36,6 @@
 	X(Command_Songs,	0, "SONGS", 	"SONGS")  \
 	X(Command_Play,		1, "PLAY", 	"PLAY <SONG_TITLE>")   \
 	X(Command_Queue,	1, "QUEUE", 	"QUEUE <SONG_TITLE")  \
-	X(Command_Tempo,	1, "TEMPO", 	"TEMPO <>")  \
 	X(Command_Volume,	1, "VOLUME", 	"VOLUME <" VOLUME_RANGE_STR ">") \
 	X(Command_Status,	0, "STATUS", 	"STATUS") \
 	X(Command_NewSong,	1, "NEWSONG", 	"NEWSONG <NEW_SONG_TITLE>") \
@@ -76,33 +77,31 @@ static const char* const COMMAND_USAGE[COMMAND_COUNT] = {
 };
 #undef X
 
-#define LIST_OF_ERRORS  \
-	X(ERR_UnknownCommand, "UNKNOWN COMMAND") 		\
-	X(ERR_ArgumentCount,  "TOO FEW/MANY ARGUMENTS") 	\
-	X(ERR_BadNumber,      "NUMERIC ARG NOT PARSEABLE")	\
-	X(ERR_OutOfRange,     "ARG OUTSIDE ALLOWED RANGE")	\
-	X(ERR_BadArgument,    "UNEXPECTED ARGUMENT")		\
-	X(ERR_Invalid_State,  "COMMAND NOT ALLOWED RIGHT NOW")	\
-	X(ERR_Capacity,       "RAN OUT OF SPACE")		\
-	X(ERR_Empty,          "REQUIRED THING MISSING")		\
-	X(ERR_Busy,           "TRY AGAIN LATER")		\
-	X(ERR_Internal,       "UNEXPECTED FAILURE")
+#define LIST_OF_ERRORS                                     \
+	X(ERR_None,	      "")                          \
+	X(ERR_UnknownCommand, "UnknownCommand")            \
+	X(ERR_ArgumentCount,  "WrongArgumentCount")        \
+	X(ERR_BadNumber,      "NumericArgNotParsable")     \
+	X(ERR_OutOfRange,     "OutsideAllowedRange")       \
+	X(ERR_BadArgument,    "UnexpectedArgument")        \
+	X(ERR_Invalid_State,  "CommandNotAllowedRightNow") \
+	X(ERR_Capacity,       "RanOutOfSpace")             \
+	X(ERR_Empty,          "RequiredThingMissing")      \
+	X(ERR_Busy,           "TryAgainLater")             \
+	X(ERR_Internal,       "UnexpectedFailure")
 
 #define X(ERR, ERR_STR) ERR,
-typedef enum CommandReturnCode {
-	OK,
+typedef enum ErrCode {
 	LIST_OF_ERRORS
-	COMMAND_RETURN_CODE_COUNT
-} CommandReturnCode;
+	ERR_CODE_COUNT
+} ErrCode;
 #undef X
 
 #define X(ERR, ERR_STR) ERR_STR,
-static const char* const COMMAND_RETURN_CODES[COMMAND_RETURN_CODE_COUNT] = {
-	"OK",
+static const char* const ERR_CODES[ERR_CODE_COUNT] = {
 	LIST_OF_ERRORS
 };
 #undef X
-
 
 typedef enum CommandPayloadKind {
 	Command_Args0,
@@ -113,8 +112,8 @@ typedef enum CommandPayloadKind {
 	Command_Str2
 } CommandPayloadKind;
 
-
 typedef struct Command {
+	uint16_t id;
 	CommandCode cc;
 	CommandPayloadKind kind;
 
@@ -131,35 +130,64 @@ typedef struct Command {
 	} u;
 } Command;
 
+typedef enum ResponseKind {
+	RESP_OK, RESP_ERR, RESP_INFO, RESP_WARN
+} ResponseKind;
+
+typedef struct CLIResponse {
+	uint16_t id;
+	ResponseKind kind;
+	ErrCode code;
+	char msg[CLI_RESPONSE_MSG_CAPACITY];
+} CLIResponse;
+
+typedef struct CommandStrSegments {
+	size_t count;
+	char s1[COMMAND_STRING_CAPACITY];
+	char s2[COMMAND_STRING_CAPACITY];
+	char s3[COMMAND_STRING_CAPACITY];
+	char s4[COMMAND_STRING_CAPACITY];
+} CommandStrSegments;
+
 QUEUE_DECLARE(CommandQueue, Command, COMMAND_QUEUE_CAPACITY)
+QUEUE_DECLARE(CLIResponseQueue, CLIResponse, UART_OUTPUT_QUEUE_CAPACITY)
 
 typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
 	uint8_t* rxBuffer;
 
+	CLIResponseQueue responseQueue;
 	char command[COMMAND_CAPACITY];
 	uint16_t commandIndex;
 } UartCLIController;
 
-void UartCLIController_Init(UartCLIController* ucc);
+static uint16_t command_id = 0;
 
+void UartCLIController_Init(UartCLIController* ucc);
 void Uart_Update(UartCLIController* ucc, CommandQueue* cq);
 
+void Print_CLIReponses(UartCLIController* ucc);
+
+int Read_From_RXBuffer(UartCLIController* ucc);
 void Append_To_CommandBuffer(UartCLIController* ucc, char c);
 
-CommandReturnCode Parse_CommandString(UartCLIController* ucc, Command* out);
+int Parse_CommandString(UartCLIController* ucc, Command* out);
+int Break_Up_CommandString(UartCLIController* ucc, CommandStrSegments* css);
+int Parse_ZeroArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
+int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
+int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
+int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);
 
-int16_t CommandCode_From_String(char* commandStr, CommandCode* cc);
+int CommandCode_From_String(char* commandStr, CommandCode* cc);
+int CommandArg_From_String(char* commandStr, int64_t* arg);
 
-int16_t CommandArg_From_String(char* commandStr, int32_t* arg);
+int Validate_ArgCount();
 
-CommandReturnCode CommandArg_Is_Valid(Command* c);
-
-void Print_CommandReturnCode(CommandReturnCode crc);
-
+void Print_CLIResponses(UartCLIController* ucc);
+void Print_ErrCode(ErrCode code);
 void Print_Commands();
-
-int16_t echo(const char* s, uint16_t len);
+void echo_newline();
+int echo(const char* s, uint16_t len);
 
 #endif

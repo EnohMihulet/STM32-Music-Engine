@@ -2,7 +2,7 @@ Debug/
 Release/
 build/
 venv/
-# Object and binary files
+
 *.o
 *.d
 *.su
@@ -14,6 +14,7 @@ venv/
 
 .metadata/
 .settings/
+__pycache__/
 *.launch
 
 .DS_Store

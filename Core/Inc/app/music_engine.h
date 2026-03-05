@@ -24,8 +24,6 @@ typedef struct MusicEngineController {
 	Song* currSong;
 	uint16_t frameIdx;
 
-	uint16_t tempo;
-
 	WorkingSong ws;
 	CommandQueue commandQueue;
 	SongQueue songQueue;
@@ -36,44 +34,46 @@ typedef struct MusicEngineController {
 
 void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc, SongList* sl);
 
-void MusicEngine_Update(MusicEngineController* mec);
+void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc);
 
-void Handle_Command(MusicEngineController* mec);
+void Handle_Command(MusicEngineController* mec, CLIResponseQueue* rq);
 
-CommandReturnCode Handle_Command_Play(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_Queue(MusicEngineController* mec, Command c);
+int Handle_Command_Pause(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Resume(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Stop(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Skip(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Clear(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Play(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Queue(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Songs(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Volume(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Status(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
-CommandReturnCode Handle_Command_NewSong(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_EditSong(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_CopySong(MusicEngineController* mec, Command c);
+int Handle_Command_NewSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_EditSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_CopySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
-CommandReturnCode Handle_Command_AddNote(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_AddRest(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_EditNote(MusicEngineController* mec, Command c);
+int Handle_Command_AddNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_AddRest(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_EditNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
-CommandReturnCode Handle_Command_ListSong(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_PlaySong(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_ClearSong(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_Save(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_Delete(MusicEngineController* mec, Command c);
-CommandReturnCode Handle_Command_Quit(MusicEngineController* mec, Command c);
+int Handle_Command_ListSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_PlaySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_ClearSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Save(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Delete(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Quit(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
-void Handle_Err_Code(CommandReturnCode crc);
+int Play_Song(MusicEngineController* mec, Song* song);
+int Queue_Song(MusicEngineController* mec, Song* song);
+int Stop_Song(MusicEngineController* mec);
 
-CommandReturnCode Play_Song(MusicEngineController* mec, Song* song);
-CommandReturnCode Queue_Song(MusicEngineController* mec, Song* song);
-CommandReturnCode Stop_Song(MusicEngineController* mec);
-
-CommandReturnCode Pause_Song(MusicEngineController* mec);
-CommandReturnCode Resume_Song(MusicEngineController* mec);
-CommandReturnCode Skip_Song(MusicEngineController* mec);
+int Pause_Song(MusicEngineController* mec);
+int Resume_Song(MusicEngineController* mec);
+int Skip_Song(MusicEngineController* mec);
 
 void Display_Status(MusicEngineController* mec);
 void Display_Songs(MusicEngineController* mec);
 void Display_Volume(MusicEngineController* mec);
-void Display_Tempo(MusicEngineController* mec);
-
-int16_t Set_Volume(MusicEngineController* mec, uint16_t v);
-int16_t Set_Tempo(MusicEngineController* mec, uint16_t t);
 
 #endif
