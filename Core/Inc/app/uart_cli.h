@@ -2,6 +2,7 @@
 #define APP_UART_CLI_H
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "buzzer.h"
@@ -159,6 +160,7 @@ typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
 	uint16_t nextCommandId;
+	bool promptPending;
 	uint8_t* rxBuffer;
 
 	CLIResponseQueue responseQueue;
@@ -169,7 +171,7 @@ typedef struct UartCLIController {
 void UartCLIController_Init(UartCLIController* ucc);
 void Uart_Update(UartCLIController* ucc, CommandQueue* cq);
 
-void Print_CLIReponses(UartCLIController* ucc);
+void Maybe_PrintPrompt(UartCLIController* ucc, CommandQueue* cq);
 
 int Read_From_RXBuffer(UartCLIController* ucc);
 void Append_To_CommandBuffer(UartCLIController* ucc, char c);
@@ -186,7 +188,7 @@ int CommandArg_From_String(char* commandStr, int64_t* arg);
 
 int Validate_ArgCount();
 
-void Print_CLIResponses(UartCLIController* ucc);
+bool Print_CLIResponses(UartCLIController* ucc);
 void Print_ErrCode(ErrCode code);
 void Print_Commands();
 void echo_newline();

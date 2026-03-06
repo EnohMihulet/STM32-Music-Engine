@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -8,14 +9,14 @@
 #include "../../Inc/usart.h"
 #include "../../Inc/app/uart_cli.h"
 
-
 void UartCLIController_Init(UartCLIController* ucc) {
 	uint32_t primask = __get_PRIMASK();
 	__disable_irq();
 	ucc->lastPos = 0;
 	ucc->currPos = 0;
-	ucc->nextCommandId = 0;
 	ucc->commandIndex = 0;
+	ucc->nextCommandId = 0;
+	ucc->promptPending = true;
 	memset(ucc->command, 0, sizeof(ucc->command));
 	__set_PRIMASK(primask);
 }
@@ -45,7 +46,9 @@ int CLIResponse_Emitf(CLIResponseQueue* q, uint16_t id, ResponseKind kind, ErrCo
 }
 
 void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
-	Print_CLIResponses(ucc);
+	Maybe_PrintPrompt(ucc, cq);
+
+	ucc->promptPending = Print_CLIResponses(ucc);
 
 	if (Read_From_RXBuffer(ucc) == -1) return;
 
@@ -53,18 +56,15 @@ void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 	c.id = ucc->nextCommandId++;
 
 	if (Parse_CommandString(ucc, &c) == 0) {
-		if (c.cc == Command_Commands) Print_Commands();
+		if (c.cc == Command_Commands) {
+			Print_Commands();
+			ucc->promptPending = true;
+		}
 		else CommandQueue_Push(cq, c);
 	}
 
 	memset(ucc->command, 0, sizeof(ucc->command));
 	ucc->commandIndex = 0;
-}
-
-void Print_CLIReponses(UartCLIController* ucc) {
-	CLIResponse resp;
-	while (CLIResponseQueue_Pop(&ucc->responseQueue, &resp) != -1) {
-	}
 }
 
 int Read_From_RXBuffer(UartCLIController* ucc) {
@@ -151,8 +151,10 @@ int Parse_CommandString(UartCLIController* ucc, Command* out) {
 		return -1;
 	}
 
-	if (out->cc == Command_None)
+	if (out->cc == Command_None) {
+		ucc->promptPending = true;
 		return -1;
+	}
 
 	switch (css.count) {
 		case 1: return Parse_ZeroArgCommand(ucc, &css, out);
@@ -269,7 +271,7 @@ int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 			if (err1 == -1 || err2 == -1) {
 				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
 				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Did you mistype the number?");
-				return -1;			
+				return -1;
 			}
 
 			if (num1 < 0 || num2 < 0) {
@@ -380,7 +382,7 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 }
 
 // TODO: Should probably rewrite this
-int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css, uint16_t commandId) {
+int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css, uint16_t command_id) {
 	css->count = 0;
 	char* currStr = css->s1;
 
@@ -389,13 +391,13 @@ int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css, uint
 		char c = ucc->command[i];
 
 		if (i - start >= COMMAND_STRING_CAPACITY) {
-			CLIResponse_Emit(&ucc->responseQueue, commandId, RESP_ERR, ERR_Capacity, NULL);
+			CLIResponse_Emit(&ucc->responseQueue, command_id, RESP_ERR, ERR_Capacity, NULL);
 			return -1;
 		}
 
 		if (c == ' ' || c == '\0') {
 			if (css->count >= COMMAND_SEGMENT_COUNT) {
-				CLIResponse_Emit(&ucc->responseQueue, commandId, RESP_ERR, ERR_ArgumentCount, NULL);
+				CLIResponse_Emit(&ucc->responseQueue, command_id, RESP_ERR, ERR_ArgumentCount, NULL);
 				return -1;
 			}
 			ucc->command[i] = '\0';
@@ -421,15 +423,24 @@ int CommandCode_From_String(char* commandStr, CommandCode* cc) {
 }
 
 int CommandArg_From_String(char* commandStr, int64_t* arg) {
-	char* endptr;
-	int64_t num = strtol(commandStr, &endptr, 10);
-	if (*endptr == '\0') *arg = num;
-	else return -1;
+	if (commandStr == NULL || arg == NULL || *commandStr == '\0') return -1;
+
+	errno = 0;
+	char* endptr = NULL;
+	long long num = strtoll(commandStr, &endptr, 10);
+
+	if (endptr == commandStr || *endptr != '\0') return -1;
+	if (errno == ERANGE) return -1;
+	if (num < INT32_MIN || num > INT32_MAX) return -1;
+
+	*arg = (int64_t)num;
 	return 0;
 }
 
-void Print_CLIResponses(UartCLIController *ucc) {
+bool Print_CLIResponses(UartCLIController *ucc) {
+	bool printed = false;
 	while (!CLIResponseQueue_IsEmpty(&ucc->responseQueue)) {
+		printed = true;
 		CLIResponse resp;
 		CLIResponseQueue_Pop(&ucc->responseQueue, &resp);
 		if (resp.kind == RESP_OK || resp.kind == RESP_ERR) {
@@ -446,6 +457,17 @@ void Print_CLIResponses(UartCLIController *ucc) {
 			echo(line, len);
 		}
 	}
+	return printed;
+}
+
+void Maybe_PrintPrompt(UartCLIController *ucc, CommandQueue* cq) {
+	if (!ucc->promptPending) return;
+	if (!CLIResponseQueue_IsEmpty(&ucc->responseQueue)) return;
+	if (!CommandQueue_IsEmpty(cq)) return;
+	if (ucc->commandIndex != 0) return;
+
+	ucc->promptPending = false;
+	echo("> ", 2);
 }
 
 void Print_ErrCode(ErrCode code) {
