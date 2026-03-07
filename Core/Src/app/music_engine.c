@@ -27,7 +27,7 @@ void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc
 }
 
 void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc) {
-	Handle_Command(mec, &ucc->responseQueue);
+	Handle_Command(mec, ucc);
 
 	if (mec->updateFrame) {
 		if (mec->pbState == Playing) {
@@ -63,20 +63,21 @@ void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc) {
 	}
 }
 
-void Handle_Command(MusicEngineController* mec, CLIResponseQueue* rq) {
+void Handle_Command(MusicEngineController* mec, UartCLIController* ucc) {
 	if (CommandQueue_IsEmpty(&(mec->commandQueue))) return;
 
 	Command c = {Command_None, -1};
 	if (CommandQueue_Pop(&(mec->commandQueue), &c) == -1) return;
 
 	int err;
+	CLIResponseQueue* rq = &ucc->responseQueue;
 	switch (c.cc) {
 		case Command_None:	break;
 		case Command_Pause:	err = Handle_Command_Pause(mec, rq, c); break;
 		case Command_Resume:	err = Handle_Command_Resume(mec, rq, c); break;
 		case Command_Stop:	err = Handle_Command_Stop(mec, rq, c); break;
 		case Command_Skip:	err = Handle_Command_Skip(mec, rq, c); break;
-		case Command_Clear:	err = Handle_Command_Clear(mec, rq, c); break;
+		case Command_Clear:	err = Handle_Command_Clear(mec, ucc, c); break;
 		case Command_Play:	err = Handle_Command_Play(mec, rq, c); break;
 		case Command_Queue:	err = Handle_Command_Queue(mec, rq, c); break;
 		case Command_Songs:	err = Handle_Command_Songs(mec, rq, c); break;
@@ -90,9 +91,9 @@ void Handle_Command(MusicEngineController* mec, CLIResponseQueue* rq) {
 		case Command_EditNote:	err = Handle_Command_EditNote(mec, rq, c); break;
 		case Command_ListSong:	err = Handle_Command_ListSong(mec, rq, c); break;
 		case Command_PlaySong:	err = Handle_Command_PlaySong(mec, rq, c); break;
-		case Command_ClearSong:	err = Handle_Command_ClearSong(mec, rq, c); break;
+		case Command_ClearSong:	err = Handle_Command_ClearSong(mec, ucc, c); break;
 		case Command_Save:	err = Handle_Command_Save(mec, rq, c); break;
-		case Command_Delete:	err = Handle_Command_Delete(mec, rq, c); break;
+		case Command_Delete:	err = Handle_Command_Delete(mec, ucc, c); break;
 		case Command_Quit:	err = Handle_Command_Quit(mec, rq, c); break;
 		default: return;
 	}
@@ -142,12 +143,18 @@ int Handle_Command_Skip(MusicEngineController* mec, CLIResponseQueue* rq, Comman
 	return 0;
 }
 
-int Handle_Command_Clear(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+int Handle_Command_Clear(MusicEngineController* mec, UartCLIController* ucc, Command c) {
 	if (SongQueue_IsEmpty(&mec->songQueue)) {
-		CLIResponse_Emit(rq, c.id, RESP_WARN, ERR_None, "Song queue already empty");
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_WARN, ERR_None, "Song queue already empty");
 		return -1;
 	}
-	else SongQueue_Clear(&mec->songQueue);
+	else if (!c.confirmed) {
+		ucc->confirmationPending = true;
+		ucc->needsConfirmed = c;
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_WARN, ERR_None, "This can not be undone. Are you sure? Y/N");
+		return -1;
+	} 
+	SongQueue_Clear(&mec->songQueue);
 	return 0;
 }
 
@@ -354,14 +361,22 @@ int Handle_Command_PlaySong(MusicEngineController* mec, CLIResponseQueue* rq, Co
 	return 0;
 }
 
-int Handle_Command_ClearSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+int Handle_Command_ClearSong(MusicEngineController* mec, UartCLIController* ucc, Command c) {
 	if (mec->ws.kind == WorkingSong_None) {
-		CLIResponse_Emit(rq, c.id, RESP_ERR, ERR_Invalid_State, NULL);
-		CLIResponse_Emit(rq, c.id, RESP_INFO, ERR_None, "Must be composing a song");
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_ERR, ERR_Invalid_State, NULL);
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_INFO, ERR_None, "Must be composing a song");
+		return -1;
+	}
+
+	if (!c.confirmed) {
+		ucc->confirmationPending = true;
+		ucc->needsConfirmed = c;
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_WARN, ERR_None, "This can not be undone. Are you sure? Y/N");
 		return -1;
 	}
 
 	memset(mec->ws.s->frames, 0, mec->ws.s->framesSize);
+	mec->ws.s->framesSize = 0;
 	return 0;
 }
 
@@ -389,22 +404,32 @@ int Handle_Command_Save(MusicEngineController* mec, CLIResponseQueue* rq, Comman
 	return 0;
 }
 
-int Handle_Command_Delete(MusicEngineController* mec, CLIResponseQueue* rq, Command c) {
+int Handle_Command_Delete(MusicEngineController* mec, UartCLIController* ucc, Command c) {
 	uint16_t idx;
 	if (SongList_Find(mec->songList, c.u.str1.s, &idx) == -1) {
-		CLIResponse_Emit(rq, c.id, RESP_ERR, ERR_BadArgument, NULL);
-		CLIResponse_Emitf(rq, c.id, RESP_INFO, ERR_None, "%s is not a song", c.u.str1.s);
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_ERR, ERR_BadArgument, NULL);
+		CLIResponse_Emitf(&ucc->responseQueue, c.id, RESP_INFO, ERR_None, "%s is not a song", c.u.str1.s);
 		return -1;
 	}
+
 	if (mec->ws.idx == idx) {
-		CLIResponse_Emit(rq, c.id, RESP_ERR, ERR_BadArgument, NULL);
-		CLIResponse_Emit(rq, c.id, RESP_INFO, ERR_None, "Cannot delete the song you are currently editing");
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_ERR, ERR_BadArgument, NULL);
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_INFO, ERR_None, "Cannot delete the song you are currently editing");
 		return -1;
 	}
+
+	if (!c.confirmed) {
+		ucc->confirmationPending = true;
+		ucc->needsConfirmed = c;
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_WARN, ERR_None, "This can not be undone. Are you sure? Y/N");
+		return -1;
+	}
+
 	if (SongList_Delete(mec->songList, c.u.str1.s) == -1) {
-		CLIResponse_Emit(rq, c.id, RESP_ERR, ERR_Internal, NULL);
+		CLIResponse_Emit(&ucc->responseQueue, c.id, RESP_ERR, ERR_Internal, NULL);
 		return -1;
 	}
+
 	return 0;
 }
 

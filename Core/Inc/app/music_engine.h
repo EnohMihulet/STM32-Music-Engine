@@ -36,13 +36,13 @@ void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc
 
 void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc);
 
-void Handle_Command(MusicEngineController* mec, CLIResponseQueue* rq);
+void Handle_Command(MusicEngineController* mec, UartCLIController* ucc);
 
 int Handle_Command_Pause(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_Resume(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_Stop(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_Skip(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
-int Handle_Command_Clear(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Clear(MusicEngineController* mec, UartCLIController* ucc, Command c);
 int Handle_Command_Play(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_Queue(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_Songs(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
@@ -59,9 +59,9 @@ int Handle_Command_EditNote(MusicEngineController* mec, CLIResponseQueue* rq, Co
 
 int Handle_Command_ListSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_PlaySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
-int Handle_Command_ClearSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_ClearSong(MusicEngineController* mec, UartCLIController* ucc, Command c);
 int Handle_Command_Save(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
-int Handle_Command_Delete(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_Delete(MusicEngineController* mec, UartCLIController* ucc, Command c);
 int Handle_Command_Quit(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
 int Play_Song(MusicEngineController* mec, Song* song);

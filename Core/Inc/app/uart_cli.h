@@ -117,6 +117,7 @@ typedef struct Command {
 	uint16_t id;
 	CommandCode cc;
 	CommandPayloadKind kind;
+	bool confirmed;
 
 	union {
 		struct {} args0;
@@ -160,9 +161,12 @@ typedef struct UartCLIController {
 	volatile uint16_t lastPos;
 	volatile uint16_t currPos;
 	uint16_t nextCommandId;
-	bool promptPending;
-	uint8_t* rxBuffer;
 
+	bool promptPending;
+	bool confirmationPending;
+	Command needsConfirmed;
+
+	uint8_t* rxBuffer;
 	CLIResponseQueue responseQueue;
 	char command[COMMAND_CAPACITY];
 	uint16_t commandIndex;
@@ -176,6 +180,7 @@ void Maybe_PrintPrompt(UartCLIController* ucc, CommandQueue* cq);
 int Read_From_RXBuffer(UartCLIController* ucc);
 void Append_To_CommandBuffer(UartCLIController* ucc, char c);
 
+int Parse_ConfirmationInput(UartCLIController*ucc);
 int Parse_CommandString(UartCLIController* ucc, Command* out);
 int Break_Up_CommandString(UartCLIController* ucc, CommandStrSegments* css, uint16_t commandId);
 int Parse_ZeroArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out);

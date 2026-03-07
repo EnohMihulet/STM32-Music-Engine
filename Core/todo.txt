@@ -1,7 +1,0 @@
-
-
-
-Input buffer capacity check
-Errors in general
-Warn before deleting/clearing and expect a Y/N before executing
-

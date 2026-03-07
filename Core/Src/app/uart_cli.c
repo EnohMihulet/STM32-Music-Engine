@@ -17,6 +17,7 @@ void UartCLIController_Init(UartCLIController* ucc) {
 	ucc->commandIndex = 0;
 	ucc->nextCommandId = 0;
 	ucc->promptPending = true;
+	ucc->confirmationPending = false;
 	memset(ucc->command, 0, sizeof(ucc->command));
 	__set_PRIMASK(primask);
 }
@@ -55,7 +56,13 @@ void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 	Command c;
 	c.id = ucc->nextCommandId++;
 
-	if (Parse_CommandString(ucc, &c) == 0) {
+	if (ucc->confirmationPending) {
+		ucc->confirmationPending = false;
+		if (Parse_ConfirmationInput(ucc) == 0) {
+			CommandQueue_Push(cq, ucc->needsConfirmed);
+		}
+	}
+	else if (Parse_CommandString(ucc, &c) == 0) {
 		if (c.cc == Command_Commands) {
 			Print_Commands();
 			ucc->promptPending = true;
@@ -141,6 +148,32 @@ void Append_To_CommandBuffer(UartCLIController* ucc, char c) {
 	}
 }
 
+int Parse_ConfirmationInput(UartCLIController*ucc) {
+	CommandStrSegments css;
+	Break_Up_CommandString(ucc, &css, ucc->needsConfirmed.id);
+
+	if (strlen(css.s1) != 1 || css.count != 1) {
+		CLIResponse_Emit(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_ERR, ERR_ArgumentCount, NULL);
+		CLIResponse_Emit(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_INFO, ERR_None, "Expected Y/N");
+		return -1;
+	}
+	
+	char c = css.s1[0];
+
+	if (c == 'Y') {
+		ucc->needsConfirmed.confirmed = true;
+	}
+	else if (c == 'N') {
+		ucc->needsConfirmed.confirmed = false;
+	}
+	else {
+		CLIResponse_Emit(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_ERR, ERR_UnknownCommand, NULL);
+		CLIResponse_Emitf(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_INFO, ERR_None, "Expected Y/N, got %c", c);
+		return -1;
+	}
+	return 0;
+}
+
 int Parse_CommandString(UartCLIController* ucc, Command* out) {
 	CommandStrSegments css;
 	if (Break_Up_CommandString(ucc, &css, out->id) == -1) return -1;
@@ -156,6 +189,7 @@ int Parse_CommandString(UartCLIController* ucc, Command* out) {
 		return -1;
 	}
 
+	out->confirmed = false;
 	switch (css.count) {
 		case 1: return Parse_ZeroArgCommand(ucc, &css, out);
 		case 2: return Parse_OneArgCommand(ucc, &css, out);
@@ -166,6 +200,7 @@ int Parse_CommandString(UartCLIController* ucc, Command* out) {
 
 	return 0;
 }
+
 
 int Parse_ZeroArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command* out) {
 	switch (out->cc) {
