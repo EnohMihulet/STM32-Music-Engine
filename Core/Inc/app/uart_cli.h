@@ -36,7 +36,7 @@
 	X(Command_Clear,	0, "CLEAR", 	"CLEAR")  \
 	X(Command_Songs,	0, "SONGS", 	"SONGS")  \
 	X(Command_Play,		1, "PLAY", 	"PLAY <SONG_TITLE>")   \
-	X(Command_Queue,	1, "QUEUE", 	"QUEUE <SONG_TITLE")  \
+	X(Command_Queue,	1, "QUEUE", 	"QUEUE <SONG_TITLE>")  \
 	X(Command_Volume,	1, "VOLUME", 	"VOLUME <" VOLUME_RANGE_STR ">") \
 	X(Command_Status,	0, "STATUS", 	"STATUS") \
 	X(Command_NewSong,	1, "NEWSONG", 	"NEWSONG <NEW_SONG_TITLE>") \
@@ -51,7 +51,7 @@
 	X(Command_ClearSong,	0, "CLEARSONG", "CLEARSONG") \
 	X(Command_Save,		0, "SAVE", 	"SAVE") \
 	X(Command_Delete,	1, "DELETE", 	"DELETE <SONG_TITLE>") \
-	X(Command_Quit,		0, "QUIT",	"QUIT <SONG_TITLE>") \
+	X(Command_Quit,		0, "QUIT",	"QUIT") \
 
 #define X(COMMAND, COMMAND_ARG_COUNT, COMMAND_STR, COMMAND_USAGE) COMMAND,
 typedef enum CommandCode {

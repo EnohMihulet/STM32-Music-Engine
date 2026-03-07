@@ -31,19 +31,34 @@ Commands can be sent over USART2 as ASCII text.
 
 `x` is used as a numeric argument (for example, song index or percentage).
 
-| Command | Description | Example usage |
-| --- | --- | --- |
-| `PAUSE` | Pause playback | `PAUSE` |
-| `RESUME` | Resume playback | `RESUME` |
-| `STOP` | Stop playback | `STOP` |
-| `SKIP` | Skip to the next song | `SKIP` |
-| `CLEAR` | Clear the song queue | `CLEAR` |
-| `SONGS` | List available songs | `SONGS` |
-| `PLAY x` | Play song index `x` | `PLAY 2` |
-| `QUEUE x` | Enqueue song index `x` | `QUEUE 4` |
-| `TEMPO x` | Set tempo (not implemented) | `TEMPO 120` |
-| `VOLUME x` | Set volume as `%` | `VOLUME 70` |
-| `STATUS` | Print current playback/engine status | `STATUS` |
+
+| Command          | Description                                        | Example usage                |
+| ---------------- | -------------------------------------------------- | ---------------------------- |
+| `COMMANDS`       | List all available commands                        | `COMMANDS`                   |
+| `PAUSE`          | Pause playback                                     | `PAUSE`                      |
+| `RESUME`         | Resume playback                                    | `RESUME`                     |
+| `STOP`           | Stop playback                                      | `STOP`                       |
+| `SKIP`           | Skip to the next song                              | `SKIP`                       |
+| `CLEAR`          | Clear the song queue                               | `CLEAR`                      |
+| `SONGS`          | List available songs                               | `SONGS`                      |
+| `PLAY x`         | Play the song titled `x`                           | `PLAY MySong`                |
+| `QUEUE x`        | Add the song titled `x` to the queue               | `QUEUE MySong`               |
+| `VOLUME x`       | Set the playback volume to `x`                     | `VOLUME 70`                  |
+| `STATUS`         | Print current playback or engine status            | `STATUS`                     |
+| `NEWSONG x`      | Create a new song with title `x`                   | `NEWSONG MyNewSong`          |
+| `EDITSONG x`     | Open song `x` for editing                          | `EDITSONG MySong`            |
+| `COPYSONG x y`   | Copy song `x` to a new song titled `y`             | `COPYSONG MySong MySongCopy` |
+| `ADDNOTE x y`    | Add a note with frequency `x` and duration `y`     | `ADDNOTE 440 500`            |
+| `ADDREST x`      | Add a rest with duration `x`                       | `ADDREST 250`                |
+| `EDITNOTE x y z` | Edit frame `x` with frequency `y` and duration `z` | `EDITNOTE 3 440 500`         |
+| `EDITTITLE x`    | Change the current song title to `x`               | `EDITTITLE BetterSongName`   |
+| `LISTSONG`       | List notes or contents of the current song         | `LISTSONG`                   |
+| `PLAYSONG`       | Play the currently edited song                     | `PLAYSONG`                   |
+| `CLEARSONG`      | Remove all notes from the current song             | `CLEARSONG`                  |
+| `SAVE`           | Save the current song                              | `SAVE`                       |
+| `DELETE x`       | Delete the song titled `x`                         | `DELETE MySong`              |
+| `QUIT`           | Quit the program                                   | `QUIT`                       |
+
 
 ## Wiring
 
