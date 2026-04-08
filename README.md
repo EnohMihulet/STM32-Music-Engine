@@ -7,6 +7,15 @@ Project using STM32CubeIDE.
 - MCU: STM32F446RETx
 - Board: Nucleo-F446RE
 
+## Architecture
+
+- **Main loop:** `main()` calls `Uart_Update`, `Button_Update`, `MusicEngine_Update`, and `Buzzer_Update` so each subsystem stays independent.
+- **Interrupt-driven inputs:** EXTI updates button edge/timing state, TIM2 provides a 1 ms playback tick, and USART2 DMA idle events signal new command data without blocking the main loop.
+- **Command pipeline:** UART parsing and button presses both produce `Command` values that are pushed into a shared `CommandQueue`. The music engine is the only consumer.
+- **Playback state machine:** `MusicEngineController` owns playback state (`Stopped`/`Playing`/`Paused`), current frame timing, queueing, and command handlers.
+- **Song editing flow:** `WorkingSong` provides a temporary edit/copy/new workspace, then persists through `SongList` + `SongStorage` only when `SAVE` is executed.
+- **Persistence layout:** songs are stored in flash sector 7 using a compact header (`magic`, `count`, `titles`) plus fixed-size song slots, allowing deterministic indexing and simple reload on boot.
+
 ## Build
 
 1. Open project in STM32CubeIDE.

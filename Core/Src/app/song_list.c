@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -29,6 +28,8 @@ static int16_t SongList_Grow(SongList* sl) {
 }
 
 void SongList_Init(SongList* sl, SongStoreHeader* ssh) {
+	if (sl == NULL || ssh == NULL) return;
+
 	uint16_t initialCount = STATIC_SONGS_COUNT + ssh->count;
 	sl->songCapacity = initialCount;
 	if (sl->songCapacity < SONGLIST_START_CAPACITY) {
@@ -36,21 +37,33 @@ void SongList_Init(SongList* sl, SongStoreHeader* ssh) {
 	}
 
 	sl->songs = (Song**)malloc(sizeof(Song*) * sl->songCapacity);
-	assert(sl->songs); // TODO: 
-	
+	if (sl->songs == NULL) {
+		sl->songCount = 0;
+		sl->songCapacity = 0;
+		return;
+	}
+	memset(sl->songs, 0, sizeof(Song*) * sl->songCapacity);
+
+	uint16_t loadedCount = 0;
 	sl->songs[0] = &SONG_1;
 	sl->songs[1] = &SONG_2;
 	sl->songs[2] = &SONG_3;
+	loadedCount = STATIC_SONGS_COUNT;
 
-	Storage_Codes sc;
 	for (uint16_t i = 0; i < ssh->count; i++) {
 		Song* s = (Song*)malloc(sizeof(Song));
-		sc = SongStorage_LoadByIdx(ssh, i, s);
-		// TODO: handle error
-		sl->songs[i + STATIC_SONGS_COUNT] = s;
+		if (s == NULL) break;
+
+		Storage_Codes sc = SongStorage_LoadByIdx(ssh, i, s);
+		if (sc != APP_OK) {
+			free(s);
+			continue;
+		}
+
+		sl->songs[loadedCount++] = s;
 	}
 
-	sl->songCount = initialCount;
+	sl->songCount = loadedCount;
 }
 
 int16_t SongList_Add(SongList* sl, SongStoreHeader* ssh, Song* s) {

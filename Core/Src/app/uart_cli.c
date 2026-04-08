@@ -9,6 +9,11 @@
 #include "../../Inc/usart.h"
 #include "../../Inc/app/uart_cli.h"
 
+static void Emit_CommandQueueFull(CLIResponseQueue* rq, uint16_t id) {
+	CLIResponse_Emit(rq, id, RESP_ERR, ERR_Capacity, NULL);
+	CLIResponse_Emit(rq, id, RESP_INFO, ERR_None, "Command queue is full");
+}
+
 void UartCLIController_Init(UartCLIController* ucc) {
 	uint32_t primask = __get_PRIMASK();
 	__disable_irq();
@@ -51,87 +56,58 @@ void Uart_Update(UartCLIController* ucc, CommandQueue* cq) {
 
 	ucc->promptPending = Print_CLIResponses(ucc);
 
-	if (Read_From_RXBuffer(ucc) == -1) return;
+	while (Read_From_RXBuffer(ucc) == 0) {
+		Command c;
+		c.id = ucc->nextCommandId++;
 
-	Command c;
-	c.id = ucc->nextCommandId++;
-
-	if (ucc->confirmationPending) {
-		ucc->confirmationPending = false;
-		if (Parse_ConfirmationInput(ucc) == 0) {
-			CommandQueue_Push(cq, ucc->needsConfirmed);
+		if (ucc->confirmationPending) {
+			ucc->confirmationPending = false;
+			if (Parse_ConfirmationInput(ucc) == 0) {
+				if (CommandQueue_Push(cq, ucc->needsConfirmed) == -1) {
+					Emit_CommandQueueFull(&ucc->responseQueue, ucc->needsConfirmed.id);
+				}
+			}
 		}
-	}
-	else if (Parse_CommandString(ucc, &c) == 0) {
-		if (c.cc == Command_Commands) {
-			Print_Commands();
-			ucc->promptPending = true;
+		else if (Parse_CommandString(ucc, &c) == 0) {
+			if (c.cc == Command_Commands) {
+				Print_Commands();
+				ucc->promptPending = true;
+			}
+			else if (CommandQueue_Push(cq, c) == -1) {
+				Emit_CommandQueueFull(&ucc->responseQueue, c.id);
+			}
 		}
-		else CommandQueue_Push(cq, c);
-	}
 
-	memset(ucc->command, 0, sizeof(ucc->command));
-	ucc->commandIndex = 0;
+		memset(ucc->command, 0, sizeof(ucc->command));
+		ucc->commandIndex = 0;
+	}
 }
 
 int Read_From_RXBuffer(UartCLIController* ucc) {
-	uint32_t primask = __get_PRIMASK();
-	uint16_t start, end;
-	__disable_irq();
-	start = ucc->lastPos;
-	end = ucc->currPos;
-	__set_PRIMASK(primask);
+	uint16_t end = (uint16_t)((UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx)) % UART_RX_BUFFER_SIZE);
+	ucc->currPos = end;
 
-	if (start == end) return -1;
+	if (ucc->lastPos == end) return -1;
 
-	bool gotLine = false;
-	uint16_t newLastPos = start;
+	while (ucc->lastPos != end) {
+		char nextChar = toupper((uint8_t)ucc->rxBuffer[ucc->lastPos]);
+		ucc->lastPos = (ucc->lastPos + 1) % UART_RX_BUFFER_SIZE;
 
-	if (start < end) {
-		for (uint16_t i = start; i < end; i++) {
-			char nextChar = toupper((uint8_t)ucc->rxBuffer[i]);
-			Append_To_CommandBuffer(ucc, nextChar);
-			if (nextChar != '\b' && nextChar != 0x7F) echo(&nextChar, 1);
+		Append_To_CommandBuffer(ucc, nextChar);
+		if (nextChar != '\b' && nextChar != 0x7F) echo(&nextChar, 1);
 
-			newLastPos = i + 1;
-
-			if (nextChar == '\n' || nextChar == '\r') {
-				echo_newline();
-				gotLine = true;
-				break;
+		if (nextChar == '\n' || nextChar == '\r') {
+			echo_newline();
+			while (ucc->commandIndex > 0
+				&& (ucc->command[ucc->commandIndex - 1] == '\n' || ucc->command[ucc->commandIndex - 1] == '\r')) {
+				ucc->commandIndex--;
 			}
-		}
-	}
-	else if (start > end) {
-		uint16_t len = UART_RX_BUFFER_SIZE - start + end;
-		uint16_t i = start;
-		for (uint16_t k = 0; k < len; k++) {
-			if (i == UART_RX_BUFFER_SIZE) i = 0;
-
-			char nextChar = toupper((uint8_t)ucc->rxBuffer[i++]);
-			Append_To_CommandBuffer(ucc, nextChar);
-			if (nextChar != '\b' && nextChar != 0x7F) echo(&nextChar, 1);
-
-			newLastPos = i;
-
-			if (nextChar == '\n' || nextChar == '\r') {
-				echo_newline();
-				gotLine = true;
-				break;
-			}
+			ucc->command[ucc->commandIndex] = '\0';
+			return 0;
 		}
 	}
 
-	ucc->lastPos = newLastPos % UART_RX_BUFFER_SIZE;
-
-	if (!gotLine) return -1;
-
-	while (ucc->commandIndex > 0 && (ucc->command[ucc->commandIndex - 1] == '\n' || ucc->command[ucc->commandIndex - 1] == '\r')) {
-		ucc->commandIndex--;
-	}
-	ucc->command[ucc->commandIndex] = '\0';
-
-	return 0;
+	return -1;
 }
 
 void Append_To_CommandBuffer(UartCLIController* ucc, char c) {
@@ -165,6 +141,8 @@ int Parse_ConfirmationInput(UartCLIController*ucc) {
 	}
 	else if (c == 'N') {
 		ucc->needsConfirmed.confirmed = false;
+		CLIResponse_Emit(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_INFO, ERR_None, "Cancelled");
+		return -1;
 	}
 	else {
 		CLIResponse_Emit(&ucc->responseQueue, ucc->needsConfirmed.id, RESP_ERR, ERR_UnknownCommand, NULL);

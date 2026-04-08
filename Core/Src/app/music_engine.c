@@ -698,35 +698,48 @@ int Skip_Song(MusicEngineController* mec) {
 void Display_Status(MusicEngineController* mec) {
 
 	char buf[128];
-	uint8_t len = 0;
+	size_t len = 0;
+
+#define APPEND_STATUS(...) do { \
+	if (len < sizeof(buf)) { \
+		int written = snprintf(buf + len, sizeof(buf) - len, __VA_ARGS__); \
+		if (written > 0) { \
+			size_t remaining = sizeof(buf) - len; \
+			if ((size_t)written >= remaining) len = sizeof(buf) - 1; \
+			else len += (size_t)written; \
+		} \
+	} \
+} while (0)
 
 	if (mec->pbState == Playing || mec->pbState == Paused) {
 		const char* songTitle = (mec->currSong != NULL) ? mec->currSong->title : "<none>";
 		if (mec->pbState == Playing)
-			len += sprintf(buf, "Playing: %s\r\n", songTitle);
+			APPEND_STATUS("Playing: %s\r\n", songTitle);
 		else if (mec->pbState == Paused)
-			len += sprintf(buf, "Paused: %s\r\n", songTitle);
+			APPEND_STATUS("Paused: %s\r\n", songTitle);
 
 		uint16_t qSize = mec->songQueue.size;
 		if (qSize != 0) {
 			uint16_t songCount = qSize > 3 ? 3 : qSize;
-			len += sprintf((char*)buf + len, "In Queue: ");
+			APPEND_STATUS("In Queue: ");
 			for (uint16_t i = 0; i < songCount; i++) {
 				Song* song = 0;
 				SongQueue_At(&mec->songQueue, i, &song);
-				len += sprintf((char*)buf + len, "%s ", song->title);
+				APPEND_STATUS("%s ", song->title);
 			}
-			if (qSize > 3) len += sprintf((char*)buf + len, "...\r\n");
-			else len += sprintf(len + (char *)buf, "\r\n");
+			if (qSize > 3) APPEND_STATUS("...\r\n");
+			else APPEND_STATUS("\r\n");
                 }
 	}
 	else {
-		len += sprintf(buf, "Not Playing\r\n");
+		APPEND_STATUS("Not Playing\r\n");
 	}
 
-	len += sprintf((char*)buf + len, "Volume: %u\r\n", mec->buzzer->volumePct);
+	APPEND_STATUS("Volume: %u\r\n", mec->buzzer->volumePct);
 
-	echo(buf, len);
+	echo(buf, (uint16_t)len);
+
+#undef APPEND_STATUS
 	return;
 }
 

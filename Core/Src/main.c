@@ -110,6 +110,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 	gUartCLIController.rxBuffer = malloc(UART_RX_BUFFER_SIZE);
+	if (gUartCLIController.rxBuffer == NULL) {
+		Error_Handler();
+	}
 
 	Button_Init(&gButton);
 	UartCLIController_Init(&gUartCLIController);
