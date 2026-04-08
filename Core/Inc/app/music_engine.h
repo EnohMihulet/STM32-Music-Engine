@@ -9,6 +9,7 @@
 #include "buzzer.h"
 #include "queue.h"
 #include "uart_cli.h"
+#include "working_song.h"
 
 #define SONG_QUEUE_CAPACITY 16
 
@@ -30,9 +31,10 @@ typedef struct MusicEngineController {
 
 	BuzzerController* buzzer;
 	SongList* songList;
+	SongStoreHeader* songStoreHeader;
 } MusicEngineController;
 
-void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc, SongList* sl);
+void MusicEngineController_Init(MusicEngineController* mec, BuzzerController* bc, SongList* sl, SongStoreHeader* ssh);
 
 void MusicEngine_Update(MusicEngineController* mec, UartCLIController* ucc);
 
@@ -56,6 +58,7 @@ int Handle_Command_CopySong(MusicEngineController* mec, CLIResponseQueue* rq, Co
 int Handle_Command_AddNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_AddRest(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_EditNote(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
+int Handle_Command_EditTitle(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 
 int Handle_Command_ListSong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);
 int Handle_Command_PlaySong(MusicEngineController* mec, CLIResponseQueue* rq, Command c);

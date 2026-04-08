@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "app/song_storage.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -57,6 +58,7 @@ UartCLIController gUartCLIController;
 BuzzerController gBuzzer;
 MusicEngineController gMusicEngineController;
 SongList gSongList;
+SongStoreHeader gSongStoreHeader;
 
 /* USER CODE END PV */
 
@@ -111,9 +113,10 @@ int main(void)
 
 	Button_Init(&gButton);
 	UartCLIController_Init(&gUartCLIController);
-	SongList_Init(&gSongList);
 	Buzzer_Init(&gBuzzer);
-	MusicEngineController_Init(&gMusicEngineController, &gBuzzer, &gSongList);
+	MusicEngineController_Init(&gMusicEngineController, &gBuzzer, &gSongList, &gSongStoreHeader);
+	SongStoreHeader_Init(&gSongStoreHeader);
+	SongList_Init(&gSongList, &gSongStoreHeader);
 
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart2, gUartCLIController.rxBuffer, UART_RX_BUFFER_SIZE);
@@ -121,6 +124,7 @@ int main(void)
 	__HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_TC);
 
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+	bool ran = false;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,7 +137,6 @@ int main(void)
 		Uart_Update(&gUartCLIController, &gMusicEngineController.commandQueue);
 		Button_Update(&gButton, &gMusicEngineController);
 		MusicEngine_Update(&gMusicEngineController, &gUartCLIController);
-
 		Buzzer_Update(&gBuzzer);
 	}
   /* USER CODE END 3 */

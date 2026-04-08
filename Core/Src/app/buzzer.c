@@ -18,11 +18,12 @@ void Buzzer_Init(BuzzerController* bc) {
 }
 
 void Buzzer_Update(BuzzerController* bc) {
-	if (bc->enabled);
+	(void)bc;
 }
 
 int16_t Buzzer_SetVolume(BuzzerController* bc, uint8_t volumePct) {
-	if (volumePct < 0 || volumePct > 100) return -1;
+	if (bc == NULL) return -1;
+	if (volumePct > VOLUME_MAX) return -1;
 	bc->volumePct = volumePct;
 
 	uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim4);
@@ -54,7 +55,10 @@ void Buzzer_Off(BuzzerController* bc) {
 }
 
 int16_t Buzzer_Start(BuzzerController* bc, uint16_t frequencyHz) {
-	if (frequencyHz == 0) Buzzer_Stop(bc);
+	if (frequencyHz == 0) {
+		Buzzer_Stop(bc);
+		return 0;
+	}
 	bc->enabled = true;
 	if (Buzzer_SetTone(bc, frequencyHz) == -1) return -1;
 	Buzzer_On(bc);

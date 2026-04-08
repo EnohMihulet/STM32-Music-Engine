@@ -263,9 +263,22 @@ int Parse_OneArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 					out->id,
 					RESP_INFO,
 					ERR_None,
-					"Frequency valid range: %d-%d",
+					"Volume valid range: %d-%d",
 					VOLUME_MIN,
 					VOLUME_MAX
+				);
+				return -1;
+			}
+			if (out->cc == Command_AddRest && (num < DURATION_MIN_MS || num > DURATION_MAX_MS)) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Duration valid range: %d-%d",
+					DURATION_MIN_MS,
+					DURATION_MAX_MS
 				);
 				return -1;
 			}
@@ -316,7 +329,7 @@ int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 			}
 			else if (num1 > INT32_MAX || num2 > INT32_MAX) {
 				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
-				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments is greater than int32_t max");
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "An argument is greater than int32_t max");
 				return -1;
 			}
 
@@ -330,6 +343,19 @@ int Parse_TwoArgCommand(UartCLIController* ucc, CommandStrSegments* css, Command
 					"Frequency valid range: %d-%d",
 					FREQUENCY_MIN_HZ,
 					FREQUENCY_MAX_HZ
+				);
+				return -1;
+			}
+			if (num2 < DURATION_MIN_MS || num2 > DURATION_MAX_MS) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Duration valid range: %d-%d",
+					DURATION_MIN_MS,
+					DURATION_MAX_MS
 				);
 				return -1;
 			}
@@ -377,7 +403,7 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 			}
 			else if (num1 > INT32_MAX || num2 > INT32_MAX || num3 > INT32_MAX) {
 				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_BadNumber, NULL);
-				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "Arguments is greater than int32_t max");
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_INFO, ERR_None, "An argument is greater than int32_t max");
 				return -1;
 			}
 
@@ -391,6 +417,19 @@ int Parse_ThreeArgCommand(UartCLIController* ucc, CommandStrSegments* css, Comma
 					"Frequency valid range: %d-%d",
 					FREQUENCY_MIN_HZ,
 					FREQUENCY_MAX_HZ
+				);
+				return -1;
+			}
+			if (num3 < DURATION_MIN_MS || num3 > DURATION_MAX_MS) {
+				CLIResponse_Emit(&ucc->responseQueue, out->id, RESP_ERR, ERR_OutOfRange, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					out->id,
+					RESP_INFO,
+					ERR_None,
+					"Duration valid range: %d-%d",
+					DURATION_MIN_MS,
+					DURATION_MAX_MS
 				);
 				return -1;
 			}
@@ -427,12 +466,28 @@ int Break_Up_CommandString(UartCLIController *ucc, CommandStrSegments *css, uint
 
 		if (i - start >= COMMAND_STRING_CAPACITY) {
 			CLIResponse_Emit(&ucc->responseQueue, command_id, RESP_ERR, ERR_Capacity, NULL);
+			CLIResponse_Emitf(
+				&ucc->responseQueue,
+				command_id,
+				RESP_INFO,
+				ERR_None,
+				"Argument too long (max %d chars)",
+				COMMAND_STRING_CAPACITY - 1
+			);
 			return -1;
 		}
 
 		if (c == ' ' || c == '\0') {
 			if (css->count >= COMMAND_SEGMENT_COUNT) {
 				CLIResponse_Emit(&ucc->responseQueue, command_id, RESP_ERR, ERR_ArgumentCount, NULL);
+				CLIResponse_Emitf(
+					&ucc->responseQueue,
+					command_id,
+					RESP_INFO,
+					ERR_None,
+					"Too many arguments (max %d)",
+					COMMAND_SEGMENT_COUNT - 1
+				);
 				return -1;
 			}
 			ucc->command[i] = '\0';
@@ -478,19 +533,42 @@ bool Print_CLIResponses(UartCLIController *ucc) {
 		printed = true;
 		CLIResponse resp;
 		CLIResponseQueue_Pop(&ucc->responseQueue, &resp);
-		if (resp.kind == RESP_OK || resp.kind == RESP_ERR) {
-			Print_ErrCode(resp.code);
+
+		if (resp.kind == RESP_OK) {
+			Print_ErrCode(resp.id, ERR_None, resp.msg);
+			continue;
 		}
-		else if (resp.kind == RESP_INFO) {
-			char line[64];
-			uint16_t len = snprintf(line, 64, "INFO %s\r\n", resp.msg);
+
+		if (resp.kind == RESP_ERR) {
+			const char* detail = resp.msg;
+
+			CLIResponse next;
+			if (!CLIResponseQueue_IsEmpty(&ucc->responseQueue)
+				&& CLIResponseQueue_Front(&ucc->responseQueue, &next) == 0
+				&& next.kind == RESP_INFO
+				&& next.id == resp.id) {
+				CLIResponseQueue_Pop(&ucc->responseQueue, &next);
+				detail = next.msg;
+			}
+
+			Print_ErrCode(resp.id, resp.code, detail);
+			continue;
+		}
+
+		if (resp.kind == RESP_INFO) {
+			char line[CLI_RESPONSE_MSG_CAPACITY + 24];
+			uint16_t len = 0;
+			if (resp.msg[0] == '\0') len = snprintf(line, sizeof(line), "#%u INFO\r\n", resp.id);
+			else len = snprintf(line, sizeof(line), "#%u INFO: %s\r\n", resp.id, resp.msg);
 			echo(line, len);
+			continue;
 		}
-		else {
-			char line[64];
-			uint16_t len = snprintf(line, 64, "WARNING %s\r\n", resp.msg);
-			echo(line, len);
-		}
+
+		char line[CLI_RESPONSE_MSG_CAPACITY + 24];
+		uint16_t len = 0;
+		if (resp.msg[0] == '\0') len = snprintf(line, sizeof(line), "#%u WARN\r\n", resp.id);
+		else len = snprintf(line, sizeof(line), "#%u WARN: %s\r\n", resp.id, resp.msg);
+		echo(line, len);
 	}
 	return printed;
 }
@@ -505,14 +583,28 @@ void Maybe_PrintPrompt(UartCLIController *ucc, CommandQueue* cq) {
 	echo("> ", 2);
 }
 
-void Print_ErrCode(ErrCode code) {
-	if (code == ERR_CODE_COUNT) return;
-	if (code != ERR_None) {
-		char buffer[64];
-		size_t len = snprintf(buffer, 64, "ERR: %s\r\n", ERR_CODES[code]);
+void Print_ErrCode(uint16_t id, ErrCode code, const char* detail) {
+	char buffer[CLI_RESPONSE_MSG_CAPACITY + 40];
+	uint16_t len = 0;
+
+	if (code == ERR_None) {
+		if (detail != NULL && detail[0] != '\0') len = snprintf(buffer, sizeof(buffer), "#%u OK: %s\r\n", id, detail);
+		else len = snprintf(buffer, sizeof(buffer), "#%u OK\r\n", id);
 		echo(buffer, len);
+		return;
 	}
-	else echo("OK\r\n", 4);
+
+	const char* errStr = "UnknownError";
+	if (code < ERR_CODE_COUNT) errStr = ERR_CODES[code];
+
+	if (detail != NULL && detail[0] != '\0') {
+		len = snprintf(buffer, sizeof(buffer), "#%u ERR %s: %s\r\n", id, errStr, detail);
+	}
+	else {
+		len = snprintf(buffer, sizeof(buffer), "#%u ERR %s\r\n", id, errStr);
+	}
+
+	echo(buffer, len);
 }
 
 void Print_Commands() {
@@ -526,6 +618,11 @@ void Print_Commands() {
 int echo(const char* s, uint16_t len) {
 	if (len == 0) return -1;
 	HAL_UART_Transmit(&huart2, (uint8_t*)s, len, 100);
+	return 0;
+}
+
+int echos(const char* s) {
+	HAL_UART_Transmit(&huart2, (uint8_t*)s, strlen(s), 100);
 	return 0;
 }
 

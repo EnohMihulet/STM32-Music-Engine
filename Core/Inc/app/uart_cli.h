@@ -17,14 +17,9 @@
 
 #define COMMAND_SEGMENT_COUNT 4
 
-#define STR(x) #x
-#define XSTR(x) STR(x)
-
-#define RANGE_STR(min, max) XSTR(min) "-" XSTR(max)
-
-#define VOLUME_RANGE_STR RANGE_STR(VOLUME_MIN, VOLUME_MAX)
-#define FREQHZ_RANGE_STR RANGE_STR(FREQUENCY_MIN_HZ, FREQUENCY_MAX_HZ)
-#define DURMS_RANGE_STR RANGE_STR(DURATION_MIN_MS, DURATION_MAX_MS)
+#define VOLUME_RANGE_STR "0-100"
+#define FREQHZ_RANGE_STR "16-65535"
+#define DURMS_RANGE_STR "1-65535"
 
 #define LIST_OF_COMMANDS \
 	X(Command_None,		0, "",	"")   \
@@ -194,9 +189,10 @@ int CommandArg_From_String(char* commandStr, int64_t* arg);
 int Validate_ArgCount();
 
 bool Print_CLIResponses(UartCLIController* ucc);
-void Print_ErrCode(ErrCode code);
+void Print_ErrCode(uint16_t id, ErrCode code, const char* detail);
 void Print_Commands();
 void echo_newline();
 int echo(const char* s, uint16_t len);
+int echos(const char* s);
 
 #endif

@@ -48,14 +48,14 @@ void Button_Update(Button* b, MusicEngineController* mec) {
 				// Confirmed single click
 				b->buttonState = ButtonStateIdle;
 				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
-				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+				CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = cc, .kind = Command_Args0 });
 			}
 			else b->buttonState = ButtonStateWait;
 		} 
 		else if ((HAL_GetTick() - pressedAt) >= HOLD_TIME) {
 			// Confirmed hold
 			b->buttonState = ButtonStateIdle;
-			CommandQueue_Push(&mec->commandQueue, (Command){Command_Clear, 0});
+			CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = Command_Clear, .kind = Command_Args0 });
 		} break;
 	case ButtonStateWait:
 		if (pressed) {
@@ -63,7 +63,7 @@ void Button_Update(Button* b, MusicEngineController* mec) {
 				// Confirmed single click
 				b->buttonState = ButtonStateIdle;
 				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
-				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+				CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = cc, .kind = Command_Args0 });
 			}
 			else b->buttonState = ButtonStateDown2;
 		}
@@ -71,20 +71,20 @@ void Button_Update(Button* b, MusicEngineController* mec) {
 			// Confirmed single click
 			b->buttonState = ButtonStateIdle;
 			CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
-			CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+			CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = cc, .kind = Command_Args0 });
 		} break;
 	case ButtonStateDown2:
 		if (released) {
 			if ((releasedAt - pressedAt) <= SHORT_CLICK_TIME) {
 				// Confirmed double click
 				b->buttonState = ButtonStateIdle;
-				CommandQueue_Push(&mec->commandQueue, (Command){Command_Skip, 0});
+				CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = Command_Skip, .kind = Command_Args0 });
 			}
 			else {
 				// Confirmed single click
 				b->buttonState = ButtonStateIdle;
 				CommandCode cc = mec->pbState == Playing ? Command_Pause : Command_Resume;
-				CommandQueue_Push(&mec->commandQueue, (Command){cc, 0});
+				CommandQueue_Push(&mec->commandQueue, (Command){ .id = 0, .cc = cc, .kind = Command_Args0 });
 			}
 		} break;
 	default: break;

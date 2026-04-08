@@ -1,77 +1,138 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define TITLE_CAPACITY 16
 #define FRAMES_CAPACITY 80
-#define START_SONG_COUNT 3
+#define STATIC_SONGS_COUNT 3
 #define SONGLIST_START_CAPACITY 6
+#define SONGSTORE_CAPACITY_MAX 16
+#define STATIC_SONGS_COUNT 3
+
+#define APP_OK 0
 
 typedef struct Frame {
 	uint16_t frequencyHz;
 	uint16_t durationMs;
 } Frame;
 
-typedef struct Song {
+typedef struct __attribute__((aligned(4))) Song {
 	char title[TITLE_CAPACITY];
 	uint16_t framesSize;
-	bool heapAllocated;
+	bool isStatic;
 	Frame frames[FRAMES_CAPACITY];
 } Song;
 
-typedef enum WorkingSong_Kind {
-	WorkingSong_None, WorkingSong_New, WorkingSong_Edit, WorkingSong_Copy
-} WorkingSong_Kind;
-
-typedef struct WorkingSong {
-	WorkingSong_Kind kind;
-	int16_t idx;
-	Song* s;
-} WorkingSong;
-
-typedef struct SongList {
-	uint16_t songCount;
-	uint16_t songCapacity;
-	Song** songs;
-} SongList;
-
 static Song SONG_1 = {
-	.title = "SONG1",
-	.framesSize = 3,
-	.heapAllocated = false,
-	.frames = {{988, 1000}, {0, 1000}, {988, 1000}}
+	.title = "MARIO",
+	.framesSize = 24,
+	.isStatic = true,
+	.frames = {
+		{659, 250},   // E5
+		{659, 250},   // E5
+		{659, 500},   // E5
+		{523, 250},   // C5
+		{659, 500},   // E5
+		{784, 1000},  // G5
+		{392, 1000},  // G4
+		{523, 750},   // C5
+		{392, 750},   // G4
+		{330, 750},   // E4
+		{440, 500},   // A4
+		{494, 500},   // B4
+		{466, 250},   // A#4
+		{440, 500},   // A4
+		{392, 375},   // G4
+		{659, 375},   // E5
+		{784, 375},   // G5
+		{880, 500},   // A5
+		{698, 250},   // F5
+		{784, 500},   // G5
+		{659, 500},   // E5
+		{523, 250},   // C5
+		{587, 250},   // D5
+		{494, 1000},  // B4
+	},
 };
 
 static Song SONG_2 = {
-	.title = "SONG2",
-	.framesSize = 1,
-	.heapAllocated = false,
-	.frames = {{659, 1000}}
+	.title = "ZELDA",
+	.framesSize = 26,
+	.isStatic = true,
+	.frames = {
+		{330, 500},   // E4
+		{392, 500},   // G4
+		{440, 250},   // A4
+		{494, 250},   // B4
+		{523, 500},   // C5
+		{587, 500},   // D5
+		{659, 1000},  // E5
+		{659, 250},   // E5
+		{659, 250},   // E5
+		{698, 250},   // F5
+		{784, 250},   // G5
+		{880, 500},   // A5
+		{988, 500},   // B5
+		{1047, 1000}, // C6
+		{1047, 250},  // C6
+		{988, 250},   // B5
+		{880, 250},   // A5
+		{784, 250},   // G5
+		{698, 500},   // F5
+		{784, 500},   // G5
+		{880, 1000},  // A5
+		{659, 250},   // E5
+		{587, 250},   // D5
+		{523, 500},   // C5
+		{494, 500},   // B4
+		{440, 1000},  // A4
+	},
 };
 
 static Song SONG_3 = {
-	.title = "SONG3",
-	.framesSize = 1,
-	.heapAllocated = false,
-	.frames = {{392, 10000}}
+	.title = "TETRIS",
+	.framesSize = 30,
+	.isStatic = true,
+	.frames = {
+		{659, 500},   // E5
+		{494, 250},   // B4
+		{523, 250},   // C5
+		{587, 500},   // D5
+		{523, 250},   // C5
+		{494, 250},   // B4
+		{440, 500},   // A4
+		{440, 250},   // A4
+		{523, 250},   // C5
+		{659, 500},   // E5
+		{587, 250},   // D5
+		{523, 250},   // C5
+		{494, 750},   // B4
+		{523, 250},   // C5
+		{587, 500},   // D5
+		{659, 500},   // E5
+		{523, 500},   // C5
+		{440, 500},   // A4
+		{440, 1000},  // A4
+		{587, 500},   // D5
+		{698, 250},   // F5
+		{880, 500},   // A5
+		{784, 250},   // G5
+		{698, 250},   // F5
+		{659, 750},   // E5
+		{523, 250},   // C5
+		{659, 500},   // E5
+		{587, 250},   // D5
+		{523, 250},   // C5
+		{494, 1000},  // B4
+	},
 };
 
-void WorkingSong_Init(WorkingSong* ws);
+static inline bool SongTitle_IsTooLong(const char* title) {
+	if (title == NULL) return false;
 
-int16_t WorkingSong_NewSong(WorkingSong* ws, char* title);
-int16_t WorkingSong_EditSong(WorkingSong* ws, Song* s);
-int16_t WorkingSong_CopySong(WorkingSong* ws, Song* s, char* title);
-
-int16_t WorkingSong_SetTitle(WorkingSong* ws, char* title);
-int16_t WorkingSong_AddNote(WorkingSong* ws, uint16_t frequencyHz, uint16_t durationMs);
-int16_t WorkingSong_EditNote(WorkingSong* ws, uint16_t frameIdx, uint16_t frequencyHz, uint16_t durationMs);
-
-int16_t WorkingSong_List(WorkingSong* ws);
-
-void SongList_Init(SongList* sl);
-
-int16_t SongList_Add(SongList* sl, WorkingSong* ws);
-int16_t SongList_Delete(SongList* sl, const char* title);
-bool SongList_Contains(SongList* sl, const char* title);
-int16_t SongList_Find(SongList* sl, const char* title, uint16_t* idx);
-int16_t SongList_Grow(SongList* sl);
+	for (uint16_t i = 0; i < TITLE_CAPACITY; i++) {
+		if (title[i] == '\0') return false;
+	}
+	return true;
+}

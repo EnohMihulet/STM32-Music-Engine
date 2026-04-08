@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define QUEUE_DECLARE(NAME, TYPE, CAPACITY)                                  \
 	typedef struct NAME {                                                \
@@ -58,8 +59,8 @@
 		memset(q->buffer, 0, CAPACITY * sizeof(TYPE));               \
 	}                                                                    \
                                                                              \
-	static inline uint16_t NAME##_At(NAME* q, uint16_t idx, TYPE* out) { \
+	static inline int16_t NAME##_At(const NAME* q, uint16_t idx, TYPE* out) { \
 		if (idx >= q->size) return -1;                               \
-		if (out) *out = q->buffer[q->head + idx % CAPACITY];         \
+		if (out) *out = q->buffer[(q->head + idx) % CAPACITY];       \
 		return 0;                                                    \
 	}

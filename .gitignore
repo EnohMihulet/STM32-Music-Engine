@@ -2,6 +2,7 @@ Debug/
 Release/
 build/
 venv/
+issues/
 
 *.o
 *.d
@@ -21,3 +22,4 @@ __pycache__/
 Thumbs.db
 *.swp
 
+.clangd
